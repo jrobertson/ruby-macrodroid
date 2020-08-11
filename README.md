@@ -1,3 +1,38 @@
+# Ruby-Macrodroid: Configuring a Macro using the TimerTrigger and ToastAction
+
+    require 'ruby-macrodroid'
+
+    droid = MacroDroid.new
+
+    # Create a new macro
+    macro = Macro.new
+
+    # Configure the timer to trigger at 7:30am on a Monday and Tuesday
+    h = {
+      days_of_week: [true, true, false, false, false, false, false], 
+      hour: 7,  
+      minute: 30
+    }
+
+    # Create the Day/Time Trigger
+    trigger = TimerTrigger.new h
+    macro.add trigger
+
+    # Create the Popup Message
+    action = ToastAction.new message_text: 'hello world!'
+    macro.add action
+
+    droid.add macro
+
+    # Save the macro
+    File.write '/home/james/m2020.mdr', droid.to_json
+
+The above snippets creates a Macrodroid macro including a Day/Time trigger which runs at 7:30 on Monday and Tuesday, and a Popup message action which display the message 'hello world!'.
+
+macrodroid macro android
+
+--------------------------
+
 # Browsing the MacroDroid macros using the ruby-macrodroid gem
 
 
