@@ -4,6 +4,7 @@
 
 require 'pp'
 require 'json'
+require 'uuid'
 require 'rxfhelper'
 
 
@@ -11,19 +12,50 @@ module Params
 
   refine Hash do
 
-    # turns camelCase into snake_case
+    # turns keys from camelCase into snake_case
 
-    def to_params()
+    def to_snake_case(h=self)
 
-      self.inject({}) do |r, x|
+      h.inject({}) do |r, x|
 
         key, value = x
-        r.merge key.sub(/^m_/,'').gsub(/[A-Z][a-z]/){|x| '_' + 
+        puts 'value: ' + value.inspect
+        
+        val = if value.is_a?(Hash) then
+          to_snake_case(value)
+        elsif value.is_a?(Array) and value.first.is_a? Hash
+          value.map {|row| to_snake_case(row)}
+        else
+          value          
+        end
+        
+        r.merge key.to_s.sub(/^m_/,'').gsub(/[A-Z][a-z]/){|x| '_' + 
           x.downcase}.gsub(/[a-z][A-Z]/){|x| x[0] + '_' + x[1].downcase}\
-          .downcase.to_sym => value
+          .downcase.to_sym => val
 
       end
     end
+
+    # turns keys from snake_case to CamelCase
+    def to_camel_case(h=self)
+      
+      h.inject({}) do |r,x|
+                
+        key, value = x   
+        
+        val = if value.is_a?(Hash) then
+          to_camel_case(value)
+        elsif value.is_a?(Array) and value.first.is_a? Hash
+          value.map {|row| to_camel_case(row)}
+        else
+          value          
+        end
+        
+        r.merge({key.to_s.gsub(/(?<!^m)_[a-z]/){|x| x[-1].upcase} => val})
+      end
+      
+    end
+
 
   end
 
@@ -40,16 +72,43 @@ class Macro
     @debug = debug
     lv=[], triggers=[], actions=[]
     @local_variables, @triggers, @actions = lv, triggers, actions
+          
+    @triggers, @actions = [], []
+    @h = {}
+    
+  end
+  
+  def add(obj)
+
+    if obj.kind_of? Trigger then
+      
+      puts 'trigger found' if @debug
+      @triggers << obj
+      
+    elsif obj.kind_of? Action
+      
+      puts 'action found' if @debug
+      @actions << obj
+      
+    elsif obj.kind_of? Constraint
+      
+      puts 'constraint found' if @debug
+      @constraints << obj
+      
+    end
+    
   end
 
   def to_h()
 
     h = {
-      'localVariables' => @local_variables,
-      'm_triggerList' => @triggers.map(&:to_h),
-      'm_actionList' => @actions.map(&:to_h),
-      'm_constraintList' =>[]
-    }  
+      local_variables: @local_variables,
+      m_trigger_list: @triggers.map(&:to_h),
+      m_action_list: @actions.map(&:to_h),
+      m_constraint_list: []
+    }
+    
+    puts 'h: ' + h.inspect if @debug
 
     @h.merge(h)
   end
@@ -57,24 +116,24 @@ class Macro
   def import_h(h)
 
     # fetch the local variables
-    @local_variables = h['localVariables']
+    @local_variables = h['local_variables']
     
     # fetch the triggers
-    @triggers = h['m_triggerList'].map do |trigger|
+    @triggers = h[:trigger_list].map do |trigger|
       
-      object(trigger.to_params)
+      object(trigger.to_snake_case)
 
     end
 
-    @actions = h['m_actionList'].map do |action|
-      object(action.to_params)
+    @actions = h[:action_list].map do |action|
+      object(action.to_snake_case)
     end
 
     # fetch the constraints (not yet implemented)
     
     @h = h
 
-    %w(localVariables m_triggerList m_actionList).each do |x|
+    %i(local_variables m_trigger_list m_action_list).each do |x|
       @h[x] = []
     end
 
@@ -96,14 +155,52 @@ end
 
 class MacroDroid
   using ColouredText
+  using Params  
 
   attr_reader :macros
 
-  def initialize(obj, debug: false)
+  def initialize(obj=nil, debug: false)
 
-    @debug = debug
-    s, _ = RXFHelper.read(obj)    
-    import_json(s) if s[0] == '{'
+    @debug = debug    
+    
+    if obj then
+      
+      s, _ = RXFHelper.read(obj)    
+      import_json(s) if s[0] == '{'
+      
+    else
+      
+      @h = {
+        cell_tower_groups: [],
+        cell_towers_ignore: [],
+        drawer_configuration: {
+          drawer_items: [],
+          background_color: -1,
+          header_color: 12692882,
+          left_side: false,
+          swipe_area_color: -7829368,
+          swipe_area_height: 20,
+          swipe_area_offset: 40,
+          swipe_area_opacity: 80,
+          swipe_area_width: 14,
+          visible_swipe_area_width: 0
+        },
+        variables: [],
+        user_icons: [],
+        geofence_data: {
+          geofence_map: {}
+        },
+        macro_list: []
+
+      }
+      
+      @macros = []
+      
+    end
+  end
+  
+  def add(macro)
+    @macros << macro
   end
 
   def export_json()
@@ -116,10 +213,10 @@ class MacroDroid
 
   def import_json(s)
 
-    @h = JSON.parse s
+    @h = JSON.parse(s, symbolize_names: true).to_snake_case
     puts ('@h: ' + @h.pretty_inspect).debug if @debug
 
-    @macros = @h["macroList"].map do |macro|
+    @macros = @h[:macro_list].map do |macro|
 
       puts ('macro: ' + macro.pretty_inspect).debug if @debug
       m = Macro.new(debug: @debug)
@@ -128,12 +225,12 @@ class MacroDroid
 
     end
 
-    @h['macroList'] = []
+    @h[:macro_list] = []
   end
 
   def to_h()
 
-    @h.merge('macroList' => @macros.map(&:to_h))
+    @h.merge(macro_list:  @macros.map(&:to_h)).to_camel_case
 
   end
 
@@ -154,7 +251,7 @@ class MacroObject
 
     h = @h
 
-    h.inject({}) do |r,x|
+    h2 = h.inject({}) do |r,x|
       puts 'x: ' + x.inspect if @debug
       key, value = x
       puts 'key: ' + key.inspect if @debug
@@ -163,9 +260,17 @@ class MacroObject
       new_key = 'm_SIGUID' if new_key == 'm_siguid'
       r.merge(new_key => value)
     end
+    
+    h2.merge('m_classType' => self.class.to_s)
 
   end
 
+  protected
+  
+  def uuid()
+    UUID.new.generate
+  end
+  
 end
 
 class Trigger < MacroObject
@@ -355,11 +460,25 @@ class CalendarTrigger < Trigger
   end
 
 end
+  
+  
 
+  
 class TimerTrigger < Trigger
 
   def initialize(h={})    
-    super({}.merge h)
+    
+    options = {
+      alarm_id: uuid(),
+      days_of_week: [false, true, false, false, false, false, false], 
+      hour: 0,  
+      minute: 0,
+      use_alarm: false
+    }
+      
+    super(options.merge h)
+    
+    
   end
 
 end
@@ -978,7 +1097,19 @@ end
 class ToastAction < Action
 
   def initialize(h={})    
-    super({}.merge h)
+    
+    options = {
+      message_text: 'Popup message for you!',
+      image_resource_name: 'launcher_no_border',
+      image_package_name: 'com.arlosoft.macrodroid',
+      image_name: 'launcher_no_border',
+      duration: 0,
+      display_icon: true,
+      background_color: -12434878,
+      position: 0,
+    }
+    
+    super(options.merge h)
   end
 
 end
@@ -1115,6 +1246,14 @@ class SetVolumeAction < Action
 
   def initialize(h={})    
     super({}.merge h)
+  end
+
+end
+
+class Constraint < MacroObject
+
+  def initialize(h={})    
+    super(h)
   end
 
 end
