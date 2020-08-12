@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'ruby-macrodroid'
-  s.version = '0.2.0'
+  s.version = '0.2.1'
   s.summary = 'Reads the exported JSON file from MacroDroid. #unofficialgem #experimental'
   s.authors = ['James Robertson']
   s.files = Dir['lib/ruby-macrodroid.rb']
