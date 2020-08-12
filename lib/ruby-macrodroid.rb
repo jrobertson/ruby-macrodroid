@@ -5,6 +5,7 @@
 require 'pp'
 require 'json'
 require 'uuid'
+require 'date'
 require 'rxfhelper'
 
 
@@ -66,10 +67,11 @@ class Macro
   using Params
 
   attr_reader :local_variables, :triggers, :actions, :guid
+  attr_accessor :name
 
-  def initialize(debug: false)
+  def initialize(name=nil, debug: false)
 
-    @debug = debug
+    @name, @debug = name, debug
     lv=[], triggers=[], actions=[]
     @local_variables, @triggers, @actions = lv, triggers, actions
           
@@ -105,7 +107,15 @@ class Macro
       local_variables: @local_variables,
       m_trigger_list: @triggers.map(&:to_h),
       m_action_list: @actions.map(&:to_h),
-      m_constraint_list: []
+      m_constraint_list: [], 
+      m_description: '',
+      m_name: @name,
+      m_excludeLog: false,
+      m_GUID: guid(),
+      m_isOrCondition: false,
+      m_enabled: false,
+      m_descriptionOpen: false,
+      m_headingColor: 0
     }
     
     puts 'h: ' + h.inspect if @debug
@@ -140,8 +150,43 @@ class Macro
     @h
 
   end
+  
+  def import_xml(node)
+    
+    @name = node.attributes[:name]
+
+    # get all the triggers
+    @triggers = node.xpath('triggers/*').map do |e|
+      
+      puts 'e.name: ' + e.name.inspect if @debug
+      {timer: TimerTrigger}[e.name.to_sym].new(e.attributes.to_h)
+      
+    end
+
+    # get all the actions
+    @actions = node.xpath('actions/*').map do |e|
+      
+      if e.name == 'notification' then
+        
+        case e.attributes[:type].to_sym
+        when :popup          
+          e.attributes.delete :type
+          ToastAction.new e.attributes.to_h
+        end
+        
+      end
+
+    end    
+    
+    self
+    
+  end
 
   private
+  
+  def guid()
+    '-' + rand(1..9).to_s + 18.times.map { rand 9 }.join    
+  end
 
   def object(h={})
 
@@ -166,33 +211,18 @@ class MacroDroid
     if obj then
       
       s, _ = RXFHelper.read(obj)    
-      import_json(s) if s[0] == '{'
+      
+      if s[0] == '{' then
+        import_json(s) 
+      else
+        s[0] == '<'
+        import_xml(s)
+        @h = build_h
+      end
       
     else
       
-      @h = {
-        cell_tower_groups: [],
-        cell_towers_ignore: [],
-        drawer_configuration: {
-          drawer_items: [],
-          background_color: -1,
-          header_color: 12692882,
-          left_side: false,
-          swipe_area_color: -7829368,
-          swipe_area_height: 20,
-          swipe_area_offset: 40,
-          swipe_area_opacity: 80,
-          swipe_area_width: 14,
-          visible_swipe_area_width: 0
-        },
-        variables: [],
-        user_icons: [],
-        geofence_data: {
-          geofence_map: {}
-        },
-        macro_list: []
-
-      }
+      @h = build_h()
       
       @macros = []
       
@@ -201,6 +231,33 @@ class MacroDroid
   
   def add(macro)
     @macros << macro
+  end
+
+  def build_h()
+    
+    {
+      cell_tower_groups: [],
+      cell_towers_ignore: [],
+      drawer_configuration: {
+        drawer_items: [],
+        background_color: -1,
+        header_color: 12692882,
+        left_side: false,
+        swipe_area_color: -7829368,
+        swipe_area_height: 20,
+        swipe_area_offset: 40,
+        swipe_area_opacity: 80,
+        swipe_area_width: 14,
+        visible_swipe_area_width: 0
+      },
+      variables: [],
+      user_icons: [],
+      geofence_data: {
+        geofence_map: {}
+      },
+      macro_list: []
+
+    }    
   end
 
   def export_json()
@@ -226,6 +283,23 @@ class MacroDroid
     end
 
     @h[:macro_list] = []
+    
+  end
+  
+  def import_xml(raws)
+    
+    s = RXFHelper.read(raws).first
+    puts 's: ' + s.inspect if @debug
+    doc = Rexle.new(s)
+    puts 'after doc' if @debug
+    
+    @macros = doc.root.xpath('macro').map do |node|
+          
+      macro = Macro.new @name
+      macro.import_xml(node)
+      macro
+      
+    end
   end
 
   def to_h()
@@ -647,6 +721,31 @@ end
 class TimerTrigger < Trigger
 
   def initialize(h={})
+    
+    if h[:days] then
+      
+      days = [false] * 7
+
+      h[:days].split(/, +/).each do |x|
+
+        r = Date::DAYNAMES.grep /#{x}/i
+        i = Date::DAYNAMES.index(r.first)
+        days[i-1] = true
+
+      end      
+      
+      h[:days_of_week] = days
+      h.delete :days
+      
+    end
+    
+    if h[:time] then
+      
+      t = Time.parse(h[:time])
+      h[:hour], h[:minute] = t.hour, t.min
+      h.delete :time
+      
+    end
 
     options = {
       alarm_id: uuid(),
@@ -2041,6 +2140,11 @@ class ToastAction < Action
 
   def initialize(h={})
 
+    if h[:msg] then
+      h[:message_text] = h[:msg]
+      h.delete :msg
+    end
+    
     options = {
       message_text: '',
       image_resource_name: 'launcher_no_border',
@@ -2297,7 +2401,6 @@ class SpeakerPhoneAction < Action
   end
 
 end
-
 
 
 class SetVolumeAction < Action
