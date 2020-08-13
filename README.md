@@ -1,3 +1,21 @@
+# Ruby-macrodroid: Creating a macro from plain text
+
+    require 'ruby-macrodroid'
+
+    s ="
+    m: popup test
+    t: at 7:30am on Mon, Tue
+    a: message popup: hello world
+    "
+
+    File.write '/home/james/m24.mdr', MacroDroid.new(s).to_json
+
+In the above example, a macro called 'popup test' is created which triggers at 7:30am, every Monday and Tuesday, and displays the popup message 'hello world'.
+
+macrodroid macro popup
+
+--------------------------
+
 # Ruby-Macrodroid: Configuring a Macro using the TimerTrigger and ToastAction
 
     require 'ruby-macrodroid'
