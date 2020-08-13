@@ -7,7 +7,57 @@ require 'json'
 require 'uuid'
 require 'date'
 require 'rxfhelper'
+require 'app-routes'
 
+
+
+class TriggersNlp
+  include AppRoutes
+
+  def initialize()
+
+    super()
+    params = {}
+    triggers(params)
+
+  end
+
+  def triggers(params) 
+
+    get /^at (\d+:\d+(?:[ap]m)?) on (.*)/i do |time, days|
+      [TimerTrigger, {time: time, days: days}]
+    end
+
+
+  end
+
+  alias find_trigger run_route
+
+end
+
+class ActionsNlp
+  include AppRoutes
+
+  def initialize()
+
+    super()
+    params = {}
+    actions(params)
+
+  end
+
+  def actions(params) 
+
+    get /^message popup: (.*)/i do |msg|
+      [ToastAction, {msg: msg}]
+    end
+
+
+  end
+
+  alias find_action run_route
+
+end
 
 module Params
 
@@ -155,28 +205,62 @@ class Macro
     
     @name = node.attributes[:name]
 
-    # get all the triggers
-    @triggers = node.xpath('triggers/*').map do |e|
+    if node.element('triggers') then
       
-      puts 'e.name: ' + e.name.inspect if @debug
-      {timer: TimerTrigger}[e.name.to_sym].new(e.attributes.to_h)
+      # level 2
       
-    end
-
-    # get all the actions
-    @actions = node.xpath('actions/*').map do |e|
-      
-      if e.name == 'notification' then
+      # get all the triggers
+      @triggers = node.xpath('triggers/*').map do |e|
         
-        case e.attributes[:type].to_sym
-        when :popup          
-          e.attributes.delete :type
-          ToastAction.new e.attributes.to_h
-        end
+        puts 'e.name: ' + e.name.inspect if @debug
+        {timer: TimerTrigger}[e.name.to_sym].new(e.attributes.to_h)
         
       end
 
-    end    
+      # get all the actions
+      @actions = node.xpath('actions/*').map do |e|
+        
+        if e.name == 'notification' then
+          
+          case e.attributes[:type].to_sym
+          when :popup          
+            e.attributes.delete :type
+            ToastAction.new e.attributes.to_h
+          end
+          
+        end
+
+      end    
+      
+    else
+      
+      # Level 1
+      
+      tp = TriggersNlp.new      
+      
+      @triggers = node.xpath('trigger').map do |e|
+        
+        r = tp.find_trigger e.text
+        
+        if r then
+          r[0].new(r[1])
+        end
+        
+      end
+      
+      ap = ActionsNlp.new      
+      
+      @actions = node.xpath('action').map do |e|
+        
+        r = ap.find_action e.text
+        
+        if r then
+          r[0].new(r[1])
+        end
+        
+      end      
+      
+    end
     
     self
     
