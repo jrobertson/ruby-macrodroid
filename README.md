@@ -1,3 +1,32 @@
+# Using Ruby-MacroDroid and ProjectSimulator together
+
+    require 'projectsimulator'
+    require 'ruby-macrodroid'
+
+    s ="
+    m: popup test
+    t: at 7:30am on Mon, Tue, Wed
+    a: message popup: hello world
+    "
+
+    md = MacroDroid.new(s)
+    ps = ProjectSimulator::Controller.new(md)
+
+    $env = {}
+    $env[:time] = Time.parse '7:29am'
+    ps.trigger :timer
+    #=> []
+
+    $env[:time] = Time.parse '7:30am'
+    ps.trigger :timer
+    #=> ["notifications/toast: hello world"]
+
+The above example demonstrates using the Ruby-MacroDroid gem with the ProjectSimulator gem to simulate the trigger of a macro at a specific time. The "notifications/toast" topic refers to the style of notification. In this case a popup toaster message is intended to be displayed.
+
+macrodroid simulator projectsimulator macro simulate test
+
+---------------------------------
+
 # Ruby-macrodroid: Creating a macro from plain text
 
     require 'ruby-macrodroid'
