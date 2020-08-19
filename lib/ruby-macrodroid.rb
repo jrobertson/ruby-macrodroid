@@ -2,13 +2,9 @@
 
 # file: ruby-macrodroid.rb
 
-require 'pp'
-require 'json'
 require 'uuid'
-require 'date'
 require 'rxfhelper'
-require 'app-routes'
-
+require 'chronic_cron'
 
 
 class TriggersNlp
@@ -70,7 +66,7 @@ module Params
       h.inject({}) do |r, x|
 
         key, value = x
-        puts 'value: ' + value.inspect
+        #puts 'value: ' + value.inspect
         
         val = if value.is_a?(Hash) then
           to_snake_case(value)
@@ -117,15 +113,18 @@ class Macro
   using Params
 
   attr_reader :local_variables, :triggers, :actions, :guid
-  attr_accessor :name
+  attr_accessor :title
 
   def initialize(name=nil, debug: false)
 
-    @name, @debug = name, debug
+    @title, @debug = name, debug
+    
+    puts 'inside Macro#initialize' if @debug
+    
     lv=[], triggers=[], actions=[]
     @local_variables, @triggers, @actions = lv, triggers, actions
           
-    @triggers, @actions = [], []
+    @triggers, @actions, @constraints = [], [], []
     @h = {}
     
   end
@@ -159,7 +158,7 @@ class Macro
       m_action_list: @actions.map(&:to_h),
       m_constraint_list: [], 
       m_description: '',
-      m_name: @name,
+      m_name: @title,
       m_excludeLog: false,
       m_GUID: guid(),
       m_isOrCondition: false,
@@ -203,7 +202,12 @@ class Macro
   
   def import_xml(node)
     
-    @name = node.attributes[:name]
+    if @debug then
+      puts 'inside Macro#import_xml'
+      puts 'node: ' + node.xml.inspect
+    end
+    
+    @title = node.attributes[:name]
 
     if node.element('triggers') then
       
@@ -242,6 +246,8 @@ class Macro
         
         r = tp.find_trigger e.text
         
+        puts 'found trigger ' + r.inspect if @debug
+        
         if r then
           r[0].new(r[1])
         end
@@ -253,6 +259,7 @@ class Macro
       @actions = node.xpath('action').map do |e|
         
         r = ap.find_action e.text
+        puts 'found action ' + r.inspect if @debug
         
         if r then
           r[0].new(r[1])
@@ -265,6 +272,33 @@ class Macro
     self
     
   end
+  
+  def match?(triggerx, detail={time: $env[:time]} )
+                
+    if @triggers.any? {|x| x.type == triggerx and x.match?(detail) } then
+      
+      if @debug then
+        puts 'checking constraints ...' 
+        puts '@constraints: ' + @constraints.inspect
+      end
+      
+      if @constraints.all? {|x| x.match?($env.merge(detail)) } then
+      
+        true
+        
+      else
+
+        return false
+        
+      end
+      
+    end
+    
+  end
+  
+  def run()
+    @actions.map(&:invoke)
+  end  
 
   private
   
@@ -298,9 +332,11 @@ class MacroDroid
       
       if s[0] == '{' then
         import_json(s) 
-      else
-        s[0] == '<'
+      elsif  s[0] == '<'
         import_xml(s)
+        @h = build_h
+      else
+        import_xml(text_to_xml(s))
         @h = build_h
       end
       
@@ -319,6 +355,7 @@ class MacroDroid
 
   def build_h()
     
+    puts 'inside Macro#build_h' if @debug
     {
       cell_tower_groups: [],
       cell_towers_ignore: [],
@@ -379,11 +416,37 @@ class MacroDroid
     
     @macros = doc.root.xpath('macro').map do |node|
           
-      macro = Macro.new @name
+      macro = Macro.new @title, debug: @debug
       macro.import_xml(node)
       macro
       
     end
+  end
+  
+  def text_to_xml(s)
+    
+    a = s.split(/.*(?=^m:)/); a.shift
+    a.map!(&:chomp)
+
+    macros = a.map do |x|
+
+      lines = x.lines
+      puts 'lines: ' + lines.inspect if @debug
+      
+      name = lines.shift[/^m: +(.*)/,1]
+      h = {t: [], a: [], c: []}
+
+      lines.each {|line| h[line[0].to_sym] << line[/^\w: +(.*)/,1] }
+      triggers = h[:t].map {|text| [:trigger, {}, text]}
+      actions = h[:a].map {|text| [:action, {}, text]}
+
+      [:macro, {name: name},'', *triggers, *actions]
+
+    end
+
+    doc = Rexle.new([:macros, {}, '', *macros])
+    doc.root.xml pretty: true    
+    
   end
 
   def to_h()
@@ -397,12 +460,22 @@ class MacroDroid
 end
 
 class MacroObject
+  using ColouredText
+  
+  attr_reader :type
+  attr_accessor :options
 
   def initialize(h={})
     
     @h = {constraint_list: [], is_or_condition: false, 
           is_disabled: false}.merge(h)
     @list = []
+    
+    # fetch the class name and convert from camelCase to snake_eyes
+    @type = self.class.to_s.sub(/Trigger|Action$/,'')\
+        .gsub(/\B[A-Z][a-z]/){|x| '_' + x.downcase}\
+        .gsub(/[a-z][A-Z]/){|x| x[0] + '_' + x[1].downcase}\
+        .downcase.to_sym
   end
 
   def to_h()
@@ -425,6 +498,13 @@ class MacroObject
 
   protected
   
+  def filter(options, h)
+    
+    (h.keys - options.keys).each {|key| h.delete key }    
+    return h
+    
+  end
+  
   def uuid()
     UUID.new.generate
   end
@@ -437,11 +517,18 @@ class Trigger < MacroObject
     super({fakeIcon: 0}.merge(h))
     @list << 'fakeIcon'
   end
+  
+  def match?(detail={})    
+
+    detail.all? {|key,value| @h[key] == value}
+    
+  end
 
 end
 
 
-
+# Category: Applications
+#
 class WebHookTrigger < Trigger
 
   def initialize(h={})
@@ -455,6 +542,22 @@ class WebHookTrigger < Trigger
   end
 
 end
+
+# Category: Applications
+#
+# Also known as Wifi State Change
+#
+# wifi_state options:
+#   0 - Wifi Enabled
+#   1 - Wifi Disabled
+#   2 - Connected to network
+#     ssid_list options:
+#       ["Any Network"] 
+#       ["some Wifi SSID"] - 1 or more SSID can be supplied
+#   3 - Disconnected from network
+#     ssid_list options:
+#       ["Any Network"] 
+#       ["some Wifi SSID"] - 1 or more SSID can be supplied
 
 class WifiConnectionTrigger < Trigger
 
@@ -471,6 +574,8 @@ class WifiConnectionTrigger < Trigger
 
 end
 
+# Category: Applications
+#
 class ApplicationInstalledRemovedTrigger < Trigger
 
   def initialize(h={})
@@ -489,6 +594,8 @@ class ApplicationInstalledRemovedTrigger < Trigger
 
 end
 
+# Category: Applications
+#
 class ApplicationLaunchedTrigger < Trigger
 
   def initialize(h={})
@@ -505,6 +612,8 @@ class ApplicationLaunchedTrigger < Trigger
 
 end
 
+# Category: Battery/Power
+#
 class BatteryLevelTrigger < Trigger
 
   def initialize(h={})
@@ -521,6 +630,8 @@ class BatteryLevelTrigger < Trigger
 
 end
 
+# Category: Battery/Power
+#
 class BatteryTemperatureTrigger < Trigger
 
   def initialize(h={})
@@ -537,6 +648,8 @@ class BatteryTemperatureTrigger < Trigger
 
 end
 
+# Category: Battery/Power
+#
 class PowerButtonToggleTrigger < Trigger
 
   def initialize(h={})
@@ -551,6 +664,9 @@ class PowerButtonToggleTrigger < Trigger
 
 end
 
+
+# Category: Battery/Power
+#
 class ExternalPowerTrigger < Trigger
 
   def initialize(h={})
@@ -568,6 +684,8 @@ class ExternalPowerTrigger < Trigger
 
 end
 
+# Category: Call/SMS
+#
 class CallActiveTrigger < Trigger
 
   def initialize(h={})
@@ -584,6 +702,8 @@ class CallActiveTrigger < Trigger
 
 end
 
+# Category: Call/SMS
+#
 class IncomingCallTrigger < Trigger
 
   def initialize(h={})
@@ -602,6 +722,8 @@ class IncomingCallTrigger < Trigger
 
 end
 
+# Category: Call/SMS
+#
 class OutgoingCallTrigger < Trigger
 
   def initialize(h={})
@@ -620,6 +742,8 @@ class OutgoingCallTrigger < Trigger
 
 end
 
+# Category: Call/SMS
+#
 class CallEndedTrigger < Trigger
 
   def initialize(h={})
@@ -638,6 +762,8 @@ class CallEndedTrigger < Trigger
 
 end
 
+# Category: Call/SMS
+#
 class CallMissedTrigger < Trigger
 
   def initialize(h={})
@@ -652,6 +778,8 @@ class CallMissedTrigger < Trigger
 
 end
 
+# Category: Call/SMS
+#
 class IncomingSMSTrigger < Trigger
 
   def initialize(h={})
@@ -674,6 +802,8 @@ class IncomingSMSTrigger < Trigger
 
 end
 
+# Category: Connectivity
+#
 class WebHookTrigger < Trigger
 
   def initialize(h={})
@@ -688,6 +818,8 @@ class WebHookTrigger < Trigger
 
 end
 
+# Category: Connectivity
+#
 class WifiConnectionTrigger < Trigger
 
   def initialize(h={})
@@ -703,6 +835,8 @@ class WifiConnectionTrigger < Trigger
 
 end
 
+# Category: Connectivity
+#
 class BluetoothTrigger < Trigger
 
   def initialize(h={})
@@ -719,6 +853,8 @@ class BluetoothTrigger < Trigger
 
 end
 
+# Category: Connectivity
+#
 class HeadphonesTrigger < Trigger
 
   def initialize(h={})
@@ -734,6 +870,8 @@ class HeadphonesTrigger < Trigger
 
 end
 
+# Category: Connectivity
+#
 class SignalOnOffTrigger < Trigger
 
   def initialize(h={})
@@ -748,6 +886,8 @@ class SignalOnOffTrigger < Trigger
 
 end
 
+# Category: Connectivity
+#
 class UsbDeviceConnectionTrigger < Trigger
 
   def initialize(h={})
@@ -762,22 +902,45 @@ class UsbDeviceConnectionTrigger < Trigger
 
 end
 
+# Category: Connectivity
+#
+# Also known as Wifi SSID Transition
+#
+# options:
+#   in_range: true | false
+#   wifi_cell_info: {display_name: "some Wifi SSID", 
+#                    ssid: "some Wifi SSID"} - 1 or more allowed
+#
 class WifiSSIDTrigger < Trigger
 
   def initialize(h={})
 
     options = {
-      wifi_cell_info_list: [{:displayName=>"", :ssid=>""}],
+      wifi_cell_info_list: [{:display_name=>"", :ssid=>""}],
       ssid_list: [],
-      _in_range: true
+      in_range: true
     }
 
     super(options.merge h)
 
   end
+  
+  def to_h()
+    
+    h = super()
+    val = h[:m_inRange]
+    
+    h[:m_InRange] = val
+    h.delete :m_inRange
+    
+    return h
+    
+  end
 
 end
 
+# Category: Date/Time
+#
 class CalendarTrigger < Trigger
 
   def initialize(h={})
@@ -802,15 +965,21 @@ class CalendarTrigger < Trigger
 
 end
 
+# Category: Date/Time
+#
 class TimerTrigger < Trigger
+  using ColouredText
+  
 
   def initialize(h={})
+
+    puts 'TimerTrigger h: ' + h.inspect if $debug
     
     if h[:days] then
       
       days = [false] * 7
-
-      h[:days].split(/, +/).each do |x|
+      
+      h[:days].split(/, */).each do |x|
 
         r = Date::DAYNAMES.grep /#{x}/i
         i = Date::DAYNAMES.index(r.first)
@@ -819,7 +988,6 @@ class TimerTrigger < Trigger
       end      
       
       h[:days_of_week] = days
-      h.delete :days
       
     end
     
@@ -827,24 +995,46 @@ class TimerTrigger < Trigger
       
       t = Time.parse(h[:time])
       h[:hour], h[:minute] = t.hour, t.min
-      h.delete :time
       
     end
+    
+    #puts ('h: ' + h.inspect).debug
 
     options = {
       alarm_id: uuid(),
-      days_of_week: [false, true, false, false, false, false, false],
+      days_of_week: [false, false, false, false, false, false, false],
       minute: 10,
       hour: 7,
       use_alarm: false
     }
+            
+    super(options.merge filter(options,h))
 
-    super(options.merge h)
+  end
+  
+  def match?(detail={time: $env[:time]})
+
+    a = @h[:days_of_week]
+    a.unshift a.pop
+
+    dow = a.map.with_index {|x, i| x ? i : nil }.compact.join(',')
+
+    s = "%s %s * * %s" % [@h[:minute], @h[:hour], dow]
+    
+    if $debug then
+      puts 's: ' + s.inspect 
+      puts 'detail: ' + detail.inspect
+      puts '@h: ' + @h.inspect
+    end
+    
+    ChronicCron.new(s, detail[:time]).to_time == detail[:time]
 
   end
 
 end
 
+# Category: Date/Time
+#
 class StopwatchTrigger < Trigger
 
   def initialize(h={})
@@ -860,6 +1050,13 @@ class StopwatchTrigger < Trigger
 
 end
 
+# Category: Date/Time
+#
+# Also known as Day of Week/Month
+#
+# month_of_year equal to 0 means it occurs every month
+# day_of_week starts with a Monday (value is 0)
+# 
 class DayTrigger < Trigger
 
   def initialize(h={})
@@ -881,6 +1078,10 @@ class DayTrigger < Trigger
 
 end
 
+# Category: Date/Time
+#
+# Regular Interval
+#
 class RegularIntervalTrigger < Trigger
 
   def initialize(h={})
@@ -900,6 +1101,17 @@ class RegularIntervalTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
+# Airplane Mode Changed
+#
+# options: 
+#   Airplane Mode Enabled
+#   Airplane Mode Disabled
+#
+# shorthand example:
+#   airplanemode: enabled
+#
 class AirplaneModeTrigger < Trigger
 
   def initialize(h={})
@@ -914,6 +1126,8 @@ class AirplaneModeTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
 class AutoSyncChangeTrigger < Trigger
 
   def initialize(h={})
@@ -928,6 +1142,8 @@ class AutoSyncChangeTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
 class DayDreamTrigger < Trigger
 
   def initialize(h={})
@@ -942,6 +1158,8 @@ class DayDreamTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
 class DockTrigger < Trigger
 
   def initialize(h={})
@@ -956,6 +1174,8 @@ class DockTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
 class GPSEnabledTrigger < Trigger
 
   def initialize(h={})
@@ -970,6 +1190,8 @@ class GPSEnabledTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
 class MusicPlayingTrigger < Trigger
 
   def initialize(h={})
@@ -984,6 +1206,9 @@ class MusicPlayingTrigger < Trigger
 
 end
 
+
+# Category: Device Events
+#
 class DeviceUnlockedTrigger < Trigger
 
   def initialize(h={})
@@ -997,19 +1222,8 @@ class DeviceUnlockedTrigger < Trigger
 
 end
 
-class DeviceUnlockedTrigger < Trigger
-
-  def initialize(h={})
-
-    options = {
-    }
-
-    super(options.merge h)
-
-  end
-
-end
-
+# Category: Device Events
+#
 class AutoRotateChangeTrigger < Trigger
 
   def initialize(h={})
@@ -1024,6 +1238,8 @@ class AutoRotateChangeTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
 class ClipboardChangeTrigger < Trigger
 
   def initialize(h={})
@@ -1039,6 +1255,8 @@ class ClipboardChangeTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
 class BootTrigger < Trigger
 
   def initialize(h={})
@@ -1052,19 +1270,8 @@ class BootTrigger < Trigger
 
 end
 
-class BootTrigger < Trigger
-
-  def initialize(h={})
-
-    options = {
-    }
-
-    super(options.merge h)
-
-  end
-
-end
-
+# Category: Device Events
+#
 class IntentReceivedTrigger < Trigger
 
   def initialize(h={})
@@ -1083,6 +1290,8 @@ class IntentReceivedTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
 class NotificationTrigger < Trigger
 
   def initialize(h={})
@@ -1107,6 +1316,8 @@ class NotificationTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
 class ScreenOnOffTrigger < Trigger
 
   def initialize(h={})
@@ -1121,6 +1332,8 @@ class ScreenOnOffTrigger < Trigger
 
 end
 
+# Category: Device Events
+#
 class SilentModeTrigger < Trigger
 
   def initialize(h={})
@@ -1135,6 +1348,8 @@ class SilentModeTrigger < Trigger
 
 end
 
+# Category: Location
+#
 class WeatherTrigger < Trigger
 
   def initialize(h={})
@@ -1158,6 +1373,8 @@ class WeatherTrigger < Trigger
 
 end
 
+# Category: Location
+#
 class GeofenceTrigger < Trigger
 
   def initialize(h={})
@@ -1176,6 +1393,8 @@ class GeofenceTrigger < Trigger
 
 end
 
+# Category: Location
+#
 class SunriseSunsetTrigger < Trigger
 
   def initialize(h={})
@@ -1191,7 +1410,8 @@ class SunriseSunsetTrigger < Trigger
 
 end
 
-
+# Category: Sensors
+#
 class ActivityRecognitionTrigger < Trigger
 
   def initialize(h={})
@@ -1207,7 +1427,8 @@ class ActivityRecognitionTrigger < Trigger
 
 end
 
-
+# Category: Sensors
+#
 class ProximityTrigger < Trigger
 
   def initialize(h={})
@@ -1223,6 +1444,8 @@ class ProximityTrigger < Trigger
 
 end
 
+# Category: Sensors
+#
 class ShakeDeviceTrigger < Trigger
 
   def initialize(h={})
@@ -1236,6 +1459,8 @@ class ShakeDeviceTrigger < Trigger
 
 end
 
+# Category: Sensors
+#
 class FlipDeviceTrigger < Trigger
 
   def initialize(h={})
@@ -1252,6 +1477,8 @@ class FlipDeviceTrigger < Trigger
 
 end
 
+# Category: Sensors
+#
 class OrientationTrigger < Trigger
 
   def initialize(h={})
@@ -1267,6 +1494,8 @@ class OrientationTrigger < Trigger
 
 end
 
+# Category: User Input
+#
 class FloatingButtonTrigger < Trigger
 
   def initialize(h={})
@@ -1290,6 +1519,8 @@ class FloatingButtonTrigger < Trigger
 
 end
 
+# Category: User Input
+#
 class ShortcutTrigger < Trigger
 
   def initialize(h={})
@@ -1303,6 +1534,8 @@ class ShortcutTrigger < Trigger
 
 end
 
+# Category: User Input
+#
 class VolumeButtonTrigger < Trigger
 
   def initialize(h={})
@@ -1320,6 +1553,8 @@ class VolumeButtonTrigger < Trigger
 
 end
 
+# Category: User Input
+#
 class MediaButtonPressedTrigger < Trigger
 
   def initialize(h={})
@@ -1335,6 +1570,8 @@ class MediaButtonPressedTrigger < Trigger
 
 end
 
+# Category: User Input
+#
 class SwipeTrigger < Trigger
 
   def initialize(h={})
@@ -1357,14 +1594,30 @@ class Action < MacroObject
   def initialize(h={})    
     super(h)
   end
+  
+  def invoke(s='')    
+    "%s/%s: %s" % [@group, @type, s]
+  end  
 
 end
 
 
+class LocationAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'location'
+  end
+  
+end
 
-class ShareLocationAction < Action
+# Category: Location
+#
+class ShareLocationAction < LocationAction
 
   def initialize(h={})
+    
+    super()
 
     options = {
       email: '',
@@ -1382,39 +1635,19 @@ class ShareLocationAction < Action
 
 end
 
-class UDPCommandAction < Action
 
+class ApplicationAction < Action
+  
   def initialize(h={})
-
-    options = {
-      destination: '',
-      message: '',
-      port: 1024
-    }
-
-    super(options.merge h)
-
+    super(h)
+    @group = 'application'
   end
-
+  
 end
 
-class UDPCommandAction < Action
-
-  def initialize(h={})
-
-    options = {
-      destination: '',
-      message: '',
-      port: 1024
-    }
-
-    super(options.merge h)
-
-  end
-
-end
-
-class LaunchActivityAction < Action
+# Category: Applications
+#
+class LaunchActivityAction < ApplicationAction
 
   def initialize(h={})
 
@@ -1431,7 +1664,9 @@ class LaunchActivityAction < Action
 
 end
 
-class KillBackgroundAppAction < Action
+# Category: Applications
+#
+class KillBackgroundAppAction < ApplicationAction
 
   def initialize(h={})
 
@@ -1446,7 +1681,9 @@ class KillBackgroundAppAction < Action
 
 end
 
-class OpenWebPageAction < Action
+# Category: Applications
+#
+class OpenWebPageAction < ApplicationAction
 
   def initialize(h={})
 
@@ -1464,7 +1701,19 @@ class OpenWebPageAction < Action
 
 end
 
-class UploadPhotoAction < Action
+
+class CameraAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'camera'
+  end
+  
+end
+
+# Category: Camera/Photo
+#
+class UploadPhotoAction < CameraAction
 
   def initialize(h={})
 
@@ -1479,7 +1728,9 @@ class UploadPhotoAction < Action
 
 end
 
-class TakePictureAction < Action
+# Category: Camera/Photo
+#
+class TakePictureAction < CameraAction
 
   def initialize(h={})
 
@@ -1497,7 +1748,19 @@ class TakePictureAction < Action
 
 end
 
-class SetWifiAction < Action
+
+class ConnectivityAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'connectivity'
+  end
+  
+end
+
+# Category: Connectivity
+#
+class SetWifiAction < ConnectivityAction
 
   def initialize(h={})
 
@@ -1513,7 +1776,9 @@ class SetWifiAction < Action
 
 end
 
-class SetBluetoothAction < Action
+# Category: Connectivity
+#
+class SetBluetoothAction < ConnectivityAction
 
   def initialize(h={})
 
@@ -1528,7 +1793,9 @@ class SetBluetoothAction < Action
 
 end
 
-class SetBluetoothAction < Action
+# Category: Connectivity
+#
+class SetBluetoothAction < ConnectivityAction
 
   def initialize(h={})
 
@@ -1543,7 +1810,9 @@ class SetBluetoothAction < Action
 
 end
 
-class SendIntentAction < Action
+# Category: Connectivity
+#
+class SendIntentAction < ConnectivityAction
 
   def initialize(h={})
 
@@ -1569,7 +1838,19 @@ class SendIntentAction < Action
 
 end
 
-class SetAlarmClockAction < Action
+
+class DateTimeAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'datetime'
+  end
+  
+end
+
+# Category: Date/Time
+#
+class SetAlarmClockAction < DateTimeAction
 
   def initialize(h={})
 
@@ -1592,7 +1873,9 @@ class SetAlarmClockAction < Action
 
 end
 
-class StopWatchAction < Action
+# Category: Date/Time
+#
+class StopWatchAction < DateTimeAction
 
   def initialize(h={})
 
@@ -1607,7 +1890,9 @@ class StopWatchAction < Action
 
 end
 
-class SayTimeAction < Action
+# Category: Date/Time
+#
+class SayTimeAction < DateTimeAction
 
   def initialize(h={})
 
@@ -1621,7 +1906,19 @@ class SayTimeAction < Action
 
 end
 
-class AndroidShortcutsAction < Action
+
+class DeviceAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'device'
+  end
+  
+end
+
+# Category: Device Actions
+#
+class AndroidShortcutsAction < DeviceAction
 
   def initialize(h={})
 
@@ -1635,7 +1932,9 @@ class AndroidShortcutsAction < Action
 
 end
 
-class ClipboardAction < Action
+# Category: Device Actions
+#
+class ClipboardAction < DeviceAction
 
   def initialize(h={})
 
@@ -1649,7 +1948,9 @@ class ClipboardAction < Action
 
 end
 
-class PressBackAction < Action
+# Category: Device Actions
+#
+class PressBackAction < DeviceAction
 
   def initialize(h={})
 
@@ -1662,7 +1963,9 @@ class PressBackAction < Action
 
 end
 
-class SpeakTextAction < Action
+# Category: Device Actions
+#
+class SpeakTextAction < DeviceAction
 
   def initialize(h={})
 
@@ -1683,7 +1986,9 @@ class SpeakTextAction < Action
 
 end
 
-class UIInteractionAction < Action
+# Category: Device Actions
+#
+class UIInteractionAction < DeviceAction
 
   def initialize(h={})
 
@@ -1698,7 +2003,9 @@ class UIInteractionAction < Action
 
 end
 
-class VoiceSearchAction < Action
+# Category: Device Actions
+#
+class VoiceSearchAction < DeviceAction
 
   def initialize(h={})
 
@@ -1711,7 +2018,19 @@ class VoiceSearchAction < Action
 
 end
 
-class ExpandCollapseStatusBarAction < Action
+
+class DeviceSettingsAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'devicesettings'
+  end
+  
+end
+
+# Category: Device Settings
+#
+class ExpandCollapseStatusBarAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1725,7 +2044,9 @@ class ExpandCollapseStatusBarAction < Action
 
 end
 
-class LaunchHomeScreenAction < Action
+# Category: Device Settings
+#
+class LaunchHomeScreenAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1738,7 +2059,9 @@ class LaunchHomeScreenAction < Action
 
 end
 
-class CameraFlashLightAction < Action
+# Category: Device Settings
+#
+class CameraFlashLightAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1753,7 +2076,9 @@ class CameraFlashLightAction < Action
 
 end
 
-class VibrateAction < Action
+# Category: Device Settings
+#
+class VibrateAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1767,7 +2092,9 @@ class VibrateAction < Action
 
 end
 
-class SetAutoRotateAction < Action
+# Category: Device Settings
+#
+class SetAutoRotateAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1781,7 +2108,9 @@ class SetAutoRotateAction < Action
 
 end
 
-class DayDreamAction < Action
+# Category: Device Settings
+#
+class DayDreamAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1794,7 +2123,9 @@ class DayDreamAction < Action
 
 end
 
-class SetKeyboardAction < Action
+# Category: Device Settings
+#
+class SetKeyboardAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1807,7 +2138,9 @@ class SetKeyboardAction < Action
 
 end
 
-class SetKeyguardAction < Action
+# Category: Device Settings
+#
+class SetKeyguardAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1821,7 +2154,9 @@ class SetKeyguardAction < Action
 
 end
 
-class CarModeAction < Action
+# Category: Device Settings
+#
+class CarModeAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1835,7 +2170,9 @@ class CarModeAction < Action
 
 end
 
-class ChangeKeyboardAction < Action
+# Category: Device Settings
+#
+class ChangeKeyboardAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1850,7 +2187,9 @@ class ChangeKeyboardAction < Action
 
 end
 
-class SetWallpaperAction < Action
+# Category: Device Settings
+#
+class SetWallpaperAction < DeviceSettingsAction
 
   def initialize(h={})
 
@@ -1869,7 +2208,18 @@ class SetWallpaperAction < Action
 
 end
 
-class OpenFileAction < Action
+class FileAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'file'
+  end
+  
+end
+
+# Category: Files
+#
+class OpenFileAction < FileAction
 
   def initialize(h={})
 
@@ -1886,7 +2236,19 @@ class OpenFileAction < Action
 
 end
 
-class ForceLocationUpdateAction < Action
+
+class LocationAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'location'
+  end
+  
+end
+
+# Category: Location
+#
+class ForceLocationUpdateAction < LocationAction
 
   def initialize(h={})
 
@@ -1899,7 +2261,9 @@ class ForceLocationUpdateAction < Action
 
 end
 
-class ShareLocationAction < Action
+# Category: Location
+#
+class ShareLocationAction < LocationAction
 
   def initialize(h={})
 
@@ -1917,7 +2281,9 @@ class ShareLocationAction < Action
 
 end
 
-class SetLocationUpdateRateAction < Action
+# Category: Location
+#
+class SetLocationUpdateRateAction < LocationAction
 
   def initialize(h={})
 
@@ -1932,7 +2298,18 @@ class SetLocationUpdateRateAction < Action
 
 end
 
-class AddCalendarEntryAction < Action
+class LoggingAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'logging'
+  end
+  
+end
+
+# Category: Logging
+#
+class AddCalendarEntryAction < LoggingAction
 
   def initialize(h={})
 
@@ -1959,7 +2336,9 @@ class AddCalendarEntryAction < Action
 
 end
 
-class LogAction < Action
+# Category: Logging
+#
+class LogAction < LoggingAction
 
   def initialize(h={})
 
@@ -1974,7 +2353,9 @@ class LogAction < Action
 
 end
 
-class ClearLogAction < Action
+# Category: Logging
+#
+class ClearLogAction < LoggingAction
 
   def initialize(h={})
 
@@ -1988,24 +2369,18 @@ class ClearLogAction < Action
 
 end
 
-class RecordMicrophoneAction < Action
-
+class MediaAction < Action
+  
   def initialize(h={})
-
-    options = {
-      path: '',
-      record_time_string: 'Until Cancelled',
-      recording_format: 0,
-      seconds_to_record_for: -1
-    }
-
-    super(options.merge h)
-
+    super(h)
+    @group = 'media'
   end
-
+  
 end
 
-class RecordMicrophoneAction < Action
+# Category: Media
+#
+class RecordMicrophoneAction < MediaAction
 
   def initialize(h={})
 
@@ -2022,7 +2397,9 @@ class RecordMicrophoneAction < Action
 
 end
 
-class PlaySoundAction < Action
+# Category: Media
+#
+class PlaySoundAction < MediaAction
 
   def initialize(h={})
 
@@ -2038,7 +2415,18 @@ class PlaySoundAction < Action
 end
 
 
-class SendEmailAction < Action
+class MessagingAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'messaging'
+  end
+  
+end
+
+# Category: Messaging
+#
+class SendEmailAction < MessagingAction
 
   def initialize(h={})
 
@@ -2058,7 +2446,9 @@ class SendEmailAction < Action
 
 end
 
-class SendSMSAction < Action
+# Category: Messaging
+#
+class SendSMSAction < MessagingAction
 
   def initialize(h={})
 
@@ -2077,7 +2467,9 @@ class SendSMSAction < Action
 
 end
 
-class UDPCommandAction < Action
+# Category: Messaging
+#
+class UDPCommandAction < MessagingAction
 
   def initialize(h={})
 
@@ -2093,7 +2485,19 @@ class UDPCommandAction < Action
 
 end
 
-class ClearNotificationsAction < Action
+
+class NotificationsAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'notifications'
+  end
+  
+end
+
+# Category: Notifications
+#
+class ClearNotificationsAction < NotificationsAction
 
   def initialize(h={})
 
@@ -2115,7 +2519,9 @@ class ClearNotificationsAction < Action
 
 end
 
-class MessageDialogAction < Action
+# Category: Notifications
+#
+class MessageDialogAction < NotificationsAction
 
   def initialize(h={})
 
@@ -2140,7 +2546,9 @@ class MessageDialogAction < Action
 
 end
 
-class AllowLEDNotificationLightAction < Action
+# Category: Notifications
+#
+class AllowLEDNotificationLightAction < NotificationsAction
 
   def initialize(h={})
 
@@ -2154,7 +2562,9 @@ class AllowLEDNotificationLightAction < Action
 
 end
 
-class SetNotificationSoundAction < Action
+# Category: Notifications
+#
+class SetNotificationSoundAction < NotificationsAction
 
   def initialize(h={})
 
@@ -2168,7 +2578,9 @@ class SetNotificationSoundAction < Action
 
 end
 
-class SetNotificationSoundAction < Action
+# Category: Notifications
+#
+class SetNotificationSoundAction < NotificationsAction
 
   def initialize(h={})
 
@@ -2182,7 +2594,9 @@ class SetNotificationSoundAction < Action
 
 end
 
-class SetNotificationSoundAction < Action
+# Category: Notifications
+#
+class SetNotificationSoundAction < NotificationsAction
 
   def initialize(h={})
 
@@ -2196,7 +2610,9 @@ class SetNotificationSoundAction < Action
 
 end
 
-class NotificationAction < Action
+# Category: Notifications
+#
+class NotificationAction < NotificationsAction
 
   def initialize(h={})
 
@@ -2220,7 +2636,9 @@ class NotificationAction < Action
 
 end
 
-class ToastAction < Action
+# Category: Notifications
+#
+class ToastAction < NotificationsAction
 
   def initialize(h={})
 
@@ -2243,10 +2661,26 @@ class ToastAction < Action
     super(options.merge h)
 
   end
+  
+  def invoke()
+    super(@h[:message_text])
+  end
 
 end
 
-class AnswerCallAction < Action
+
+class PhoneAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'phone'
+  end
+  
+end
+
+# Category: Phone
+#
+class AnswerCallAction < PhoneAction
 
   def initialize(h={})
 
@@ -2260,7 +2694,9 @@ class AnswerCallAction < Action
 
 end
 
-class ClearCallLogAction < Action
+# Category: Phone
+#
+class ClearCallLogAction < PhoneAction
 
   def initialize(h={})
 
@@ -2276,7 +2712,9 @@ class ClearCallLogAction < Action
 
 end
 
-class OpenCallLogAction < Action
+# Category: Phone
+#
+class OpenCallLogAction < PhoneAction
 
   def initialize(h={})
 
@@ -2289,7 +2727,9 @@ class OpenCallLogAction < Action
 
 end
 
-class RejectCallAction < Action
+# Category: Phone
+#
+class RejectCallAction < PhoneAction
 
   def initialize(h={})
 
@@ -2302,7 +2742,9 @@ class RejectCallAction < Action
 
 end
 
-class MakeCallAction < Action
+# Category: Phone
+#
+class MakeCallAction < PhoneAction
 
   def initialize(h={})
 
@@ -2317,7 +2759,10 @@ class MakeCallAction < Action
 
 end
 
-class SetRingtoneAction < Action
+
+# Category: Phone
+#
+class SetRingtoneAction < PhoneAction
 
   def initialize(h={})
 
@@ -2331,7 +2776,18 @@ class SetRingtoneAction < Action
 
 end
 
-class SetBrightnessAction < Action
+class ScreenAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'screen'
+  end
+  
+end
+
+# Category: Screen
+#
+class SetBrightnessAction < ScreenAction
 
   def initialize(h={})
 
@@ -2347,7 +2803,9 @@ class SetBrightnessAction < Action
 
 end
 
-class ForceScreenRotationAction < Action
+# Category: Screen
+#
+class ForceScreenRotationAction < ScreenAction
 
   def initialize(h={})
 
@@ -2361,7 +2819,9 @@ class ForceScreenRotationAction < Action
 
 end
 
-class ScreenOnAction < Action
+# Category: Screen
+#
+class ScreenOnAction < ScreenAction
 
   def initialize(h={})
 
@@ -2378,7 +2838,9 @@ class ScreenOnAction < Action
 
 end
 
-class DimScreenAction < Action
+# Category: Screen
+#
+class DimScreenAction < ScreenAction
 
   def initialize(h={})
 
@@ -2393,7 +2855,9 @@ class DimScreenAction < Action
 
 end
 
-class KeepAwakeAction < Action
+# Category: Screen
+#
+class KeepAwakeAction < ScreenAction
 
   def initialize(h={})
 
@@ -2410,7 +2874,9 @@ class KeepAwakeAction < Action
 
 end
 
-class SetScreenTimeoutAction < Action
+# Category: Screen
+#
+class SetScreenTimeoutAction < ScreenAction
 
   def initialize(h={})
 
@@ -2427,8 +2893,18 @@ class SetScreenTimeoutAction < Action
 end
 
 
+class VolumeAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'volume'
+  end
+  
+end
 
-class SilentModeVibrateOffAction < Action
+# Category: Volume
+#
+class SilentModeVibrateOffAction < VolumeAction
 
   def initialize(h={})
 
@@ -2442,7 +2918,9 @@ class SilentModeVibrateOffAction < Action
 
 end
 
-class SetVibrateAction < Action
+# Category: Volume
+#
+class SetVibrateAction < VolumeAction
 
   def initialize(h={})
 
@@ -2457,7 +2935,9 @@ class SetVibrateAction < Action
 
 end
 
-class VolumeIncrementDecrementAction < Action
+# Category: Volume
+#
+class VolumeIncrementDecrementAction < VolumeAction
 
   def initialize(h={})
 
@@ -2471,7 +2951,9 @@ class VolumeIncrementDecrementAction < Action
 
 end
 
-class SpeakerPhoneAction < Action
+# Category: Volume
+#
+class SpeakerPhoneAction < VolumeAction
 
   def initialize(h={})
 
@@ -2486,8 +2968,9 @@ class SpeakerPhoneAction < Action
 
 end
 
-
-class SetVolumeAction < Action
+# Category: Volume
+#
+class SetVolumeAction < VolumeAction
 
   def initialize(h={})
 
