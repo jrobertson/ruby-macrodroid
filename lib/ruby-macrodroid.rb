@@ -55,6 +55,29 @@ class ActionsNlp
 
 end
 
+class ConstraintsNlp
+  include AppRoutes
+
+  def initialize()
+
+    super()
+    params = {}
+    constraints(params)
+
+  end
+
+  def constraints(params) 
+
+    get /^airplane mode (.*)/i do |state|
+      [AirplaneModeConstraint, {enabled: (state =~ /^enabled|on$/) == 0}]
+    end
+
+  end
+
+  alias find_constraint run_route
+
+end
+
 module Params
 
   refine Hash do
@@ -112,19 +135,16 @@ class Macro
   using ColouredText
   using Params
 
-  attr_reader :local_variables, :triggers, :actions, :guid
+  attr_reader :local_variables, :triggers, :actions, :constraints, :guid
   attr_accessor :title
 
   def initialize(name=nil, debug: false)
 
     @title, @debug = name, debug
     
-    puts 'inside Macro#initialize' if @debug
-    
-    lv=[], triggers=[], actions=[]
-    @local_variables, @triggers, @actions = lv, triggers, actions
+    puts 'inside Macro#initialize' if @debug    
           
-    @triggers, @actions, @constraints = [], [], []
+    @local_variables, @triggers, @actions, @constraints = [], [], [], []
     @h = {}
     
   end
@@ -156,7 +176,7 @@ class Macro
       local_variables: @local_variables,
       m_trigger_list: @triggers.map(&:to_h),
       m_action_list: @actions.map(&:to_h),
-      m_constraint_list: [], 
+      m_constraint_list: @constraints.map(&:to_h),
       m_description: '',
       m_name: @title,
       m_excludeLog: false,
@@ -188,13 +208,15 @@ class Macro
       object(action.to_snake_case)
     end
 
-    # fetch the constraints (not yet implemented)
+    # fetch the constraints                               
+    @constraints = h[:constraint_list].map do |constraint|
+      object(constraint.to_snake_case)
+    end                               
     
     @h = h
 
-    %i(local_variables m_trigger_list m_action_list).each do |x|
-      @h[x] = []
-    end
+    %i(local_variables m_trigger_list m_action_list m_constraint_list)\
+      .each {|x| @h[x] = [] }
 
     @h
 
@@ -235,6 +257,14 @@ class Macro
         end
 
       end    
+                               
+      # get all the constraints
+      @constraints = node.xpath('constraints/*').map do |e|
+        
+        puts 'e.name: ' + e.name.inspect if @debug
+        {airplanemode: AirplaneModeConstraint}[e.name.to_sym].new(e.attributes.to_h)
+
+      end                                  
       
     else
       
@@ -266,6 +296,19 @@ class Macro
         end
         
       end      
+                               
+      cp = ConstraintsNlp.new      
+      
+      @constraints = node.xpath('constraint').map do |e|
+        
+        r = cp.find_constraint e.text
+        puts 'found constraint ' + r.inspect if @debug
+        
+        if r then
+          r[0].new(r[1])
+        end
+        
+      end                                   
       
     end
     
@@ -439,8 +482,9 @@ class MacroDroid
       lines.each {|line| h[line[0].to_sym] << line[/^\w: +(.*)/,1] }
       triggers = h[:t].map {|text| [:trigger, {}, text]}
       actions = h[:a].map {|text| [:action, {}, text]}
+      constraints = h[:c].map {|text| [:constraint, {}, text]}
 
-      [:macro, {name: name},'', *triggers, *actions]
+      [:macro, {name: name},'', *triggers, *actions, *constraints]
 
     end
 
@@ -2992,6 +3036,859 @@ class Constraint < MacroObject
 
   def initialize(h={})    
     super(h)
+  end
+
+end
+
+class TimeOfDayConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      end_hour: 8,
+      end_minute: 0,
+      start_hour: 22,
+      start_minute: 0
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Battery/Power
+#
+class BatteryLevelConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      battery_level: 23,
+      equals: false,
+      greater_than: false
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Battery/Power
+#
+class BatterySaverStateConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      option: 0
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Battery/Power
+#
+class BatteryTemperatureConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      equals: false,
+      greater_than: false,
+      temperature: 30
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Battery/Power
+#
+class ExternalPowerConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      external_power: true,
+      power_connected_options: [false, true, false]
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Connectivity
+#
+class BluetoothConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      any_device: false,
+      bt_state: 0,
+      device_name: 'Any Device'
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Connectivity
+#
+class GPSEnabledConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      enabled: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Connectivity
+#
+class LocationModeConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      options: [false, false, false, true]
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Connectivity
+#
+class SignalOnOffConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      option: 0
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Connectivity
+#
+class WifiConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      ssid_list: [],
+      wifi_state: 0
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Connectivity
+#
+class CellTowerConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      cell_group_name: 'test group',
+      cell_ids: ["524,14,41070731"],
+      in_range: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Connectivity
+#
+class IsRoamingConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      is_roaming: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Connectivity
+#
+class DataOnOffConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      data_on: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Connectivity
+#
+class WifiHotSpotConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      check_connections: false,
+      comparison_value: 0,
+      connected_count: 0,
+      enabled: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Date/Time
+#
+class CalendarConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      enable_regex: false,
+      availability: 0,
+      calendar_id: '1',
+      calendar_name: 'PC Sync',
+      detail_text: '',
+      entry_set: true,
+      ignore_all_day: false,
+      title_text: ''
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Date/Time
+#
+class DayOfWeekConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      days_of_week: [false, false, true, false, false, false, false]
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Date/Time
+#
+class TimeOfDayConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      end_hour: 1,
+      end_minute: 1,
+      start_hour: 21,
+      start_minute: 58
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Date/Time
+#
+class DayOfMonthConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      day_names: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31"],
+      days_of_month: [false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Date/Time
+#
+class MonthOfYearConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      months: [false, false, false, false, false, false, false, true, false, false, false, false]
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Date/Time
+#
+class SunsetSunriseConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      option: 0
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Device State
+#
+class AirplaneModeConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      enabled: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Device State
+#
+class AutoRotateConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      enabled: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Device State
+#
+class DeviceLockedConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      locked: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Device State
+#
+class RoamingOnOffConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      roaming_on: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Device State
+#
+class TimeSinceBootConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      less_than: true,
+      time_period_seconds: 10921
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Device State
+#
+class AutoSyncConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      enabled: false
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Device State
+#
+class NFCStateConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      enabled: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Device State
+#
+class IsRootedConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      rooted: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Device State
+#
+class VpnConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      option: 0
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: MacroDroid Specific
+#
+class MacroEnabledConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      enabled: true,
+      macro_ids: [-8016812002629322290],
+      macro_names: ["Intruder photo "]
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: MacroDroid Specific
+#
+class ModeConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      mode: 'Away',
+      mode_selected: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: MacroDroid Specific
+#
+class TriggerThatInvokedConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      not: false,
+      si_guid_that_invoked: -4951291100076165433,
+      trigger_name: 'Shake Device'
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: MacroDroid Specific
+#
+class LastRunTimeConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      check_this_macro: false,
+      invoked: true,
+      macro_ids: [-6922688338672048267],
+      macro_names: ["Opendoor"],
+      time_period_seconds: 7260
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Media
+#
+class HeadphonesConnectionConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      connected: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Media
+#
+class MusicActiveConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      music_active: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Notification
+#
+class NotificationPresentConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      enable_regex: false,
+      application_name_list: ["All applications"],
+      exact_match: false,
+      excludes: false,
+      excludes_apps: -1,
+      option: 0,
+      package_name_list: ["allApplications"],
+      text_content: ''
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Notification
+#
+class PriorityModeConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      in_mode: true,
+      selected_index: 0
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Notification
+#
+class NotificationVolumeConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      option: 1
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Phone
+#
+class InCallConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      in_call: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Phone
+#
+class PhoneRingingConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      ringing: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Screen and Speaker
+#
+class BrightnessConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      brightness: 35,
+      equals: false,
+      force_pie_mode: false,
+      greater_than: false,
+      is_auto_brightness: false
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Screen and Speaker
+#
+class VolumeConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      option: 0
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Screen and Speaker
+#
+class SpeakerPhoneConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      enabled: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Screen and Speaker
+#
+class DarkThemeConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      option: 0
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Screen and Speaker
+#
+class ScreenOnOffConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      a: true,
+      screen_on: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Screen and Speaker
+#
+class VolumeLevelConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      comparison: 0,
+      stream_index_array: [false, true, false, false, false, false, false],
+      volume: 42
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Sensors
+#
+class FaceUpDownConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      option: -1,
+      selected_options: [true, false, true, false, false, false]
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Sensors
+#
+class LightLevelConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      light_level: -1,
+      light_level_float: 5000.0,
+      option: 1
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Sensors
+#
+class DeviceOrientationConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      portrait: true
+    }
+
+    super(options.merge h)
+
+  end
+
+end
+
+# Category: Sensors
+#
+class ProximitySensorConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      near: true
+    }
+
+    super(options.merge h)
+
   end
 
 end
