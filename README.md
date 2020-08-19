@@ -1,3 +1,22 @@
+# Ruby-MacroDroid: Using a constraint within a macro
+
+    require 'ruby-macrodroid'
+
+    s ="
+    m: popup test
+    t: at 21:30 on Wed
+    a: message popup: hello world
+    c: airplane mode enabled
+    "
+
+    File.write '/home/james/m243.mdr', MacroDroid.new(s).to_json
+
+In the above example a constraint has been added to the macro which states that the macro will not execute unless the device has Airplane mode enabled.
+
+macrodroid macro constraint
+
+---------------------------------
+
 # Using Ruby-MacroDroid and ProjectSimulator together
 
     require 'projectsimulator'
