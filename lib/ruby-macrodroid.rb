@@ -3,6 +3,7 @@
 # file: ruby-macrodroid.rb
 
 require 'uuid'
+require 'yaml'
 require 'rxfhelper'
 require 'chronic_cron'
 
@@ -30,7 +31,37 @@ class TriggersNlp
       [TimerTrigger, {time: time, days: days}]
     end
 
+    # time.is? 'at 18:30pm on Mon or Tue'
+    get /^time.is\? ['"](?:at )?(\d+:\d+(?:[ap]m)?) (?:on )?(.*)['"]/i do |time, days|      
+      [TimerTrigger, {time: time, days: days.gsub(' or ',', ')}]
+    end
+    
+    get /^shake[ _]device\??$/i do 
+      [ShakeDeviceTrigger, {}]
+    end
+    
+    get /^Flip Device (.*)$/i do |motion|
+       facedown = motion =~ /Face Up (?:->|to) Face Down/i
+      [FlipDeviceTrigger, {face_down: facedown }]
+    end
+    
+    get /^flip_device_down\?$/i do
+      [FlipDeviceTrigger, {face_down: true }]
+    end
 
+    get /^flip_device_up\?$/i do
+      [FlipDeviceTrigger, {face_down: false }]
+    end        
+    
+    get /^Failed Login Attempt$/i do
+      [FailedLoginTrigger, {}]
+    end
+    
+    get /^failed_login?$/i do
+      [FailedLoginTrigger, {}]
+    end         
+        
+    
   end
 
   alias find_trigger run_route
@@ -54,9 +85,26 @@ class ActionsNlp
       [ToastAction, {msg: msg}]
     end
 
-    get /^Popup Message ['"][^'"]+/i do |msg|
+    get /^Popup[ _]Message ['"]([^'"]+)/i do |msg|
       [ToastAction, {msg: msg}]
     end
+    
+    get /^say current[ _]time/i do
+      [SayTimeAction, {}]
+    end    
+    
+    get /^Torch :?(.*)/i do |onoffstate|
+      state = onoffstate.downcase == 'on' ? 0 : 1
+      [CameraFlashLightAction, {state: state}]
+    end    
+    
+    get /^Take Picture/i do
+      [TakePictureAction, {}]
+    end
+    
+    get /^take_picture/i do
+      [TakePictureAction, {}]
+    end           
 
   end
 
@@ -145,7 +193,7 @@ class Macro
   using Params
 
   attr_reader :local_variables, :triggers, :actions, :constraints, :guid
-  attr_accessor :title
+  attr_accessor :title, :description
 
   def initialize(name=nil, debug: false)
 
@@ -209,6 +257,7 @@ class Macro
     end
     
     @title = h[:name]
+    @description = h[:description]
     
     # fetch the local variables
     @local_variables = h['local_variables']
@@ -246,6 +295,7 @@ class Macro
     end
     
     @title = node.attributes[:name]
+    @description = node.attributes[:description]
 
     if node.element('triggers') then
       
@@ -357,15 +407,33 @@ class Macro
   
   def run()
     @actions.map(&:invoke)
-  end  
+  end
+
+  def to_pc()
+    
+    heading = '# ' + @title + "\n"
+    heading += '# ' + @description if @description
+    condition = @triggers.first.to_pc
+    actions = @actions.map(&:to_pc).join("\n")
+    
+<<EOF
+#{heading}
+
+if #{condition} then
+  #{actions}
+end
+EOF
+  end
     
   def to_s()
-    [
+    a = [
       'm: ' + @title,
       @triggers.map {|x| "t: %s" % x}.join("\n"),
       @actions.map {|x| "a: %s" % x}.join("\n"),
       @constraints.map {|x| "a: %s" % x}.join("\n")
-    ].join("\n")
+    ]
+    a.insert(1, 'd: ' + @description) if @description
+    a.join("\n")
   end
 
   private
@@ -384,6 +452,9 @@ class Macro
 end
 
 
+class MacroDroidError < Exception
+end
+
 class MacroDroid
   using ColouredText
   using Params  
@@ -396,16 +467,33 @@ class MacroDroid
     
     if obj then
       
-      s, _ = RXFHelper.read(obj)    
+      raw_s, _ = RXFHelper.read(obj)    
+      
+      s = raw_s.strip
       
       if s[0] == '{' then
+        
         import_json(s) 
+        
       elsif  s[0] == '<'
+        
         import_xml(s)
         @h = build_h
+        
       else
-        import_xml(text_to_xml(s))
+        
+        xml = if s =~ /^m: / then
+          text_to_xml(s)
+        elsif s =~ /^# / 
+          pc_to_xml(s)
+        else
+          raise MacroDroidError, 'invalid input'
+        end
+        import_xml(xml)
         @h = build_h
+        
+
+        
       end
       
     else
@@ -459,7 +547,10 @@ class MacroDroid
 
   def import_json(s)
 
-    @h = JSON.parse(s, symbolize_names: true).to_snake_case
+    h = JSON.parse(s, symbolize_names: true)
+    puts 'json_to_yaml: ' + h.to_yaml if @debug
+    
+    @h = h.to_snake_case
     puts ('@h: ' + @h.inspect).debug if @debug
 
     @macros = @h[:macro_list].map do |macro|
@@ -477,18 +568,46 @@ class MacroDroid
   
   def import_xml(raws)
     
+    puts 'raws: ' + raws.inspect if @debug
     s = RXFHelper.read(raws).first
     puts 's: ' + s.inspect if @debug
     doc = Rexle.new(s)
-    puts 'after doc' if @debug
+    
+    if @debug then
+      puts 'doc: ' + doc.root.xml
+    end
+    
+    debug = @debug
     
     @macros = doc.root.xpath('macro').map do |node|
           
-      macro = Macro.new @title, debug: @debug
+      macro = Macro.new @title, debug: debug
       macro.import_xml(node)
       macro
       
     end
+  end
+  
+  def pc_to_xml(s)
+    
+    macros = s.strip.split(/(?=#)/).map do |raw_macro|
+
+      a = raw_macro.lines
+      name = a.shift[/(?<=# ).*/]
+      description = a.shift[/(?<=# ).*/] if a[0][/^# /]
+      body = a.join.strip
+
+      a2 = body.lines
+      # get the trigger
+      trigger = [:trigger, {}, a2[0][/^if (.*) then/,1]]
+      action = [:action, {}, a2[1].strip]
+      [:macro, {name: name, description: description}, trigger, action, []]
+
+    end
+
+    doc = Rexle.new([:macros, {}, '', *macros])
+    doc.root.xml pretty: true    
+    
   end
   
   def text_to_xml(s)
@@ -523,9 +642,15 @@ class MacroDroid
     @h.merge(macro_list:  @macros.map(&:to_h)).to_camel_case
 
   end
+  
+  # returns pseudocode
+  #
+  def to_pc()
+    @macros.map(&:to_pc).join("\n\n")
+  end
 
   def to_s()
-    @macros.map(&:to_s).join("\n\n")
+    @macros.map(&:to_s).join("\n")
   end
 
 end
@@ -1103,6 +1228,10 @@ class TimerTrigger < Trigger
 
   end
   
+  def to_pc()    
+    "time.is? '%s'" % self.to_s.gsub(',', ' or')
+  end
+  
   def to_s()
     
     dow = @h[:days_of_week]
@@ -1185,6 +1314,15 @@ class RegularIntervalTrigger < Trigger
 
 end
 
+class DeviceEventsTrigger < Trigger
+  
+  def initialize(h={})
+    super(h)
+    @group = 'device_events'
+  end  
+  
+end
+
 # Category: Device Events
 #
 # Airplane Mode Changed
@@ -1196,7 +1334,7 @@ end
 # shorthand example:
 #   airplanemode: enabled
 #
-class AirplaneModeTrigger < Trigger
+class AirplaneModeTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1212,7 +1350,7 @@ end
 
 # Category: Device Events
 #
-class AutoSyncChangeTrigger < Trigger
+class AutoSyncChangeTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1228,7 +1366,7 @@ end
 
 # Category: Device Events
 #
-class DayDreamTrigger < Trigger
+class DayDreamTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1244,7 +1382,7 @@ end
 
 # Category: Device Events
 #
-class DockTrigger < Trigger
+class DockTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1260,7 +1398,30 @@ end
 
 # Category: Device Events
 #
-class GPSEnabledTrigger < Trigger
+class FailedLoginTrigger < DeviceEventsTrigger
+  
+  def initialize(h={})
+
+    options = {
+      num_failures: 1
+    }
+
+    super(options.merge h)
+
+  end
+  
+  def to_pc()
+    'failed_login?'
+  end
+
+  def to_s()
+    'Failed Login Attempt'
+  end
+end
+
+# Category: Device Events
+#
+class GPSEnabledTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1276,7 +1437,7 @@ end
 
 # Category: Device Events
 #
-class MusicPlayingTrigger < Trigger
+class MusicPlayingTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1293,7 +1454,7 @@ end
 
 # Category: Device Events
 #
-class DeviceUnlockedTrigger < Trigger
+class DeviceUnlockedTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1308,7 +1469,7 @@ end
 
 # Category: Device Events
 #
-class AutoRotateChangeTrigger < Trigger
+class AutoRotateChangeTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1324,7 +1485,7 @@ end
 
 # Category: Device Events
 #
-class ClipboardChangeTrigger < Trigger
+class ClipboardChangeTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1341,7 +1502,7 @@ end
 
 # Category: Device Events
 #
-class BootTrigger < Trigger
+class BootTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1356,7 +1517,7 @@ end
 
 # Category: Device Events
 #
-class IntentReceivedTrigger < Trigger
+class IntentReceivedTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1376,7 +1537,7 @@ end
 
 # Category: Device Events
 #
-class NotificationTrigger < Trigger
+class NotificationTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1402,7 +1563,7 @@ end
 
 # Category: Device Events
 #
-class ScreenOnOffTrigger < Trigger
+class ScreenOnOffTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1418,7 +1579,7 @@ end
 
 # Category: Device Events
 #
-class SilentModeTrigger < Trigger
+class SilentModeTrigger < DeviceEventsTrigger
 
   def initialize(h={})
 
@@ -1494,9 +1655,19 @@ class SunriseSunsetTrigger < Trigger
 
 end
 
+
+class SensorsTrigger < Trigger
+  
+  def initialize(h={})
+    super(h)
+    @group = 'sensors'
+  end
+  
+end
+
 # Category: Sensors
 #
-class ActivityRecognitionTrigger < Trigger
+class ActivityRecognitionTrigger < SensorsTrigger
 
   def initialize(h={})
 
@@ -1513,7 +1684,7 @@ end
 
 # Category: Sensors
 #
-class ProximityTrigger < Trigger
+class ProximityTrigger < SensorsTrigger
 
   def initialize(h={})
 
@@ -1530,7 +1701,7 @@ end
 
 # Category: Sensors
 #
-class ShakeDeviceTrigger < Trigger
+class ShakeDeviceTrigger < SensorsTrigger
 
   def initialize(h={})
 
@@ -1540,12 +1711,25 @@ class ShakeDeviceTrigger < Trigger
     super(options.merge h)
 
   end
+  
+  def to_pc()
+    'shake_device?'
+  end
+  
+  def to_s()
+    'Shake Device'
+  end
 
 end
 
 # Category: Sensors
 #
-class FlipDeviceTrigger < Trigger
+# options:
+#   Face Up -> Face Down
+#   Face Down -> Face Up
+#   Any -> Face Down
+#
+class FlipDeviceTrigger < SensorsTrigger
 
   def initialize(h={})
 
@@ -1557,13 +1741,23 @@ class FlipDeviceTrigger < Trigger
 
     super(options.merge h)
 
+  end  
+  
+  def to_pc()
+    @h[:face_down] ? 'flip_device_down?' : 'flip_device_up?'
   end
+  
+  def to_s()
+    
+    action = @h[:face_down] ? 'Face Up -> Face Down' : 'Face Down -> Face Up'
+    'Flip Device ' + action
+  end  
 
 end
 
 # Category: Sensors
 #
-class OrientationTrigger < Trigger
+class OrientationTrigger < SensorsTrigger
 
   def initialize(h={})
 
@@ -1829,6 +2023,15 @@ class TakePictureAction < CameraAction
     super(options.merge h)
 
   end
+  
+  def to_pc()
+    camera = @h[:use_front_camera] ? :front : :back
+    'take_photo :' + camera.to_s
+  end
+
+  def to_s()
+    'Take Picture'
+  end  
 
 end
 
@@ -1987,6 +2190,20 @@ class SayTimeAction < DateTimeAction
     super(options.merge h)
 
   end
+  
+  def invoke()
+    time = ($env and $env[:time]) ? $env[:time] : Time.now
+    tformat = @h['12_hour'] ? "%-I:%M%P" : "%H:%M"
+    super(time.strftime(tformat))
+  end
+  
+  def to_pc()
+    'say current_time()'
+  end
+  
+  def to_s()
+    'Say Current Time'
+  end  
 
 end
 
@@ -2157,6 +2374,14 @@ class CameraFlashLightAction < DeviceSettingsAction
     super(options.merge h)
 
   end
+
+  def to_pc()
+    'torch :on'
+  end
+  
+  def to_s()
+    'Torch On'
+  end  
 
 end
 
@@ -2748,6 +2973,10 @@ class ToastAction < NotificationsAction
   
   def invoke()
     super(@h[:message_text])
+  end
+  
+  def to_pc()
+    "popup_message '%s'" % @h[:message_text]
   end
   
   def to_s()
@@ -3487,6 +3716,18 @@ class AirplaneModeConstraint < Constraint
       toggle_match?(:enabled, switch)
       
     end
+    
+  end
+  
+  def to_pc()
+    status = @h[:enabled] ? 'enabled?' : 'disabled?'
+    'airplane_mode.' + status
+  end
+  
+  def to_s()
+    
+    status = @h[:enabled] ? 'Enabled' : 'Disabled'
+    'Airplane Mode ' + status
     
   end
 
