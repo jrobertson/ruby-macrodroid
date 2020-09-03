@@ -7,6 +7,12 @@ require 'rxfhelper'
 require 'chronic_cron'
 
 
+MODEL =<<EOF
+device
+  connectivity
+    airplane_mode is disabled
+EOF
+
 class TriggersNlp
   include AppRoutes
 
@@ -20,7 +26,7 @@ class TriggersNlp
 
   def triggers(params) 
 
-    get /^at (\d+:\d+(?:[ap]m)?) on (.*)/i do |time, days|
+    get /^(?:at )?(\d+:\d+(?:[ap]m)?) (?:on )?(.*)/i do |time, days|
       [TimerTrigger, {time: time, days: days}]
     end
 
@@ -48,6 +54,9 @@ class ActionsNlp
       [ToastAction, {msg: msg}]
     end
 
+    get /^Popup Message ['"][^'"]+/i do |msg|
+      [ToastAction, {msg: msg}]
+    end
 
   end
 
@@ -178,7 +187,7 @@ class Macro
       m_action_list: @actions.map(&:to_h),
       m_constraint_list: @constraints.map(&:to_h),
       m_description: '',
-      m_name: @title,
+      m_name: title(),
       m_excludeLog: false,
       m_GUID: guid(),
       m_isOrCondition: false,
@@ -194,6 +203,13 @@ class Macro
 
   def import_h(h)
 
+    if @debug then
+      puts 'inside import_h'
+      puts 'h:' + h.inspect
+    end
+    
+    @title = h[:name]
+    
     # fetch the local variables
     @local_variables = h['local_variables']
     
@@ -316,16 +332,16 @@ class Macro
     
   end
   
-  def match?(triggerx, detail={time: $env[:time]} )
+  def match?(triggerx, detail={time: $env[:time]}, model=nil )
                 
-    if @triggers.any? {|x| x.type == triggerx and x.match?(detail) } then
+    if @triggers.any? {|x| x.type == triggerx and x.match?(detail, model) } then
       
       if @debug then
         puts 'checking constraints ...' 
         puts '@constraints: ' + @constraints.inspect
       end
       
-      if @constraints.all? {|x| x.match?($env.merge(detail)) } then
+      if @constraints.all? {|x| x.match?($env.merge(detail), model) } then
       
         true
         
@@ -342,6 +358,15 @@ class Macro
   def run()
     @actions.map(&:invoke)
   end  
+    
+  def to_s()
+    [
+      'm: ' + @title,
+      @triggers.map {|x| "t: %s" % x}.join("\n"),
+      @actions.map {|x| "a: %s" % x}.join("\n"),
+      @constraints.map {|x| "a: %s" % x}.join("\n")
+    ].join("\n")
+  end
 
   private
   
@@ -435,11 +460,11 @@ class MacroDroid
   def import_json(s)
 
     @h = JSON.parse(s, symbolize_names: true).to_snake_case
-    puts ('@h: ' + @h.pretty_inspect).debug if @debug
+    puts ('@h: ' + @h.inspect).debug if @debug
 
     @macros = @h[:macro_list].map do |macro|
 
-      puts ('macro: ' + macro.pretty_inspect).debug if @debug
+      puts ('macro: ' + macro.inspect).debug if @debug
       m = Macro.new(debug: @debug)
       m.import_h(macro)
       m
@@ -499,7 +524,9 @@ class MacroDroid
 
   end
 
-
+  def to_s()
+    @macros.map(&:to_s).join("\n\n")
+  end
 
 end
 
@@ -562,10 +589,11 @@ class Trigger < MacroObject
     @list << 'fakeIcon'
   end
   
-  def match?(detail={})    
+  def match?(detail={}, model=nil)
 
-    detail.all? {|key,value| @h[key] == value}
-    
+    # only match where the key exists in the trigger object
+    detail.select {|k,v| @h.include? k }.all? {|key,value| @h[key] == value}
+
   end
 
 end
@@ -1056,7 +1084,7 @@ class TimerTrigger < Trigger
 
   end
   
-  def match?(detail={time: $env[:time]})
+  def match?(detail={time: $env[:time]}, model=nil)
 
     a = @h[:days_of_week]
     a.unshift a.pop
@@ -1073,6 +1101,18 @@ class TimerTrigger < Trigger
     
     ChronicCron.new(s, detail[:time]).to_time == detail[:time]
 
+  end
+  
+  def to_s()
+    
+    dow = @h[:days_of_week]
+
+    a = Date::ABBR_DAYNAMES
+
+    time = Time.parse("%s:%s" % [@h[:hour], @h[:minute]]).strftime("%-H:%M%P")
+    days = (a[1..-1] << a.first).zip(dow).select {|_,b| b}.map(&:first)
+    
+    "at %s on %s" % [time, days.join(', ')]
   end
 
 end
@@ -2709,6 +2749,10 @@ class ToastAction < NotificationsAction
   def invoke()
     super(@h[:message_text])
   end
+  
+  def to_s()
+    "Popup Message '%s'" % @h[:message_text]
+  end
 
 end
 
@@ -3036,6 +3080,30 @@ class Constraint < MacroObject
 
   def initialize(h={})    
     super(h)
+  end
+  
+  def match?(detail={}, model=nil)
+
+    detail.select {|k,v| @h.include? k }.all? {|key,value| @h[key] == value}
+
+  end
+  
+  #def to_s()
+  #  ''
+  #end
+  
+  protected
+  
+  def toggle_match?(key, val)
+    
+    if @h[key] == true and val == key.to_s then
+      true
+    elsif @h[key] == false and val != key.to_s 
+      true
+    else
+      false
+    end
+    
   end
 
 end
@@ -3397,6 +3465,29 @@ class AirplaneModeConstraint < Constraint
 
     super(options.merge h)
 
+  end
+  
+  def match?(detail={}, model=nil)
+    
+    puts 'inside airplaneModeConstraint#match?' if $debug
+    
+    if detail.has_key? :enabled then
+      
+      puts 'detail has the key' if $debug
+      super(detail)
+      
+    elsif model
+      
+      if $debug then
+        puts 'checking the model'
+        switch = model.connectivity.airplane_mode.switch
+        puts 'switch: ' + switch.inspect
+      end
+      
+      toggle_match?(:enabled, switch)
+      
+    end
+    
   end
 
 end
