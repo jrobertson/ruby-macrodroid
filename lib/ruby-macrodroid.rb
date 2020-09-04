@@ -4,6 +4,8 @@
 
 require 'uuid'
 require 'yaml'
+require 'glw'
+require 'geozone'
 require 'rxfhelper'
 require 'chronic_cron'
 
@@ -60,7 +62,11 @@ class TriggersNlp
     get /^failed_login?$/i do
       [FailedLoginTrigger, {}]
     end         
-        
+
+    get /^Geofence (Entry|Exit) \(([^\)]+)/i do |direction, name|
+      enter_area = direction.downcase.to_sym == :entry
+      [GeofenceTrigger, {name: name, enter_area: enter_area}]
+    end     
     
   end
 
@@ -81,14 +87,17 @@ class ActionsNlp
 
   def actions(params) 
 
+    # e.g. message popup: hello world!
     get /^message popup: (.*)/i do |msg|
       [ToastAction, {msg: msg}]
     end
 
+    # e.g. Popup Message 'hello world!'
     get /^Popup[ _]Message ['"]([^'"]+)/i do |msg|
       [ToastAction, {msg: msg}]
     end
     
+    # e.g. say current time
     get /^say current[ _]time/i do
       [SayTimeAction, {}]
     end    
@@ -105,6 +114,46 @@ class ActionsNlp
     get /^take_picture/i do
       [TakePictureAction, {}]
     end           
+        
+    # e.g. Display Notification: Hi there: This is the body of the message
+    get /^Display Notification: ([^:]+): [^$]+$/i do |subject, text|
+      [NotificationAction, {subject: subject, text: text}]
+    end           
+    
+    
+    # e.g. Enable Wifi
+    get /^(Enable|Disable) Wifi$/i do |raw_state|
+      
+      state = raw_state.downcase.to_sym == :enable ? 0 : 1
+      [SetWifiAction, {state: state}]
+      
+    end    
+    
+    # e.g. Play: Altair
+    get /^Play: (.*)$/i do |name|
+
+      [PlaySoundAction, {file_path: name}]
+      
+    end     
+    
+    # e.g. Launch Settings
+    get /^Launch (.*)$/i do |application|
+
+      h = {
+        application_name: application,
+        package_to_launch: 'com.android.' + application.downcase
+      }
+      [LaunchActivityAction, h]
+      
+    end
+    
+    # e.g. HTTP GET http://someurl.com/something
+    get /^HTTP GET ([^$]+)$/i do |url|
+
+      [OpenWebPageAction, url_to_open: url]
+      
+    end
+
 
   end
 
@@ -195,9 +244,9 @@ class Macro
   attr_reader :local_variables, :triggers, :actions, :constraints, :guid
   attr_accessor :title, :description
 
-  def initialize(name=nil, debug: false)
+  def initialize(name=nil, geofence: geofence, debug: false)
 
-    @title, @debug = name, debug
+    @title, @geofence, @debug = name, geofence, debug
     
     puts 'inside Macro#initialize' if @debug    
           
@@ -405,14 +454,23 @@ class Macro
     
   end
   
+  # invokes the actions
+  #
   def run()
     @actions.map(&:invoke)
+  end
+  
+  # prepares the environment in order for triggers to test fire successfully
+  # Used for testing
+  #
+  def set_env()
+    @triggers.each(&:set_env)
   end
 
   def to_pc()
     
-    heading = '# ' + @title + "\n"
-    heading += '# ' + @description if @description
+    heading = '# ' + @title
+    heading += '\n# ' + @description if @description
     condition = @triggers.first.to_pc
     actions = @actions.map(&:to_pc).join("\n")
     
@@ -426,14 +484,34 @@ EOF
   end
     
   def to_s()
+    
     a = [
       'm: ' + @title,
       @triggers.map {|x| "t: %s" % x}.join("\n"),
       @actions.map {|x| "a: %s" % x}.join("\n"),
       @constraints.map {|x| "a: %s" % x}.join("\n")
     ]
-    a.insert(1, 'd: ' + @description) if @description
+    
+    if @description and @description.length >= 1 then
+      a.insert(1, 'd: ' + @description)
+    end
+    
     a.join("\n")
+    
+  end
+  
+  def to_summary()
+    
+    a = [
+      'm: ' + @title,
+      't: ' + @triggers.map(&:to_s).join(", "),
+      'a: ' + @actions.map(&:to_s).join(", "),
+    ]
+    
+    a <<  'c: ' + @constraints.map(&:to_s).join(", ") if @constraints.any?
+    
+    a.join("\n") + "\n"
+    
   end
 
   private
@@ -446,7 +524,15 @@ EOF
 
     puts ('inside object h:'  + h.inspect).debug if @debug
     klass = Object.const_get h[:class_type]
-    klass.new h
+    puts klass.inspect.highlight if $debug
+    
+    if klass == GeofenceTrigger then
+      puts 'GeofenceTrigger found'.highlight if $debug
+      klass.new(@geofence, h)
+    else
+      klass.new h
+    end
+    
   end
 
 end
@@ -459,7 +545,7 @@ class MacroDroid
   using ColouredText
   using Params  
 
-  attr_reader :macros
+  attr_reader :macros, :geofence
 
   def initialize(obj=nil, debug: false)
 
@@ -481,8 +567,11 @@ class MacroDroid
         @h = build_h
         
       else
+
+        puts 's: ' + s.inspect if @debug
         
-        xml = if s =~ /^m: / then
+        xml = if s =~ /m:\s/ then
+          puts 'before text_to_xml' if @debug
           text_to_xml(s)
         elsif s =~ /^# / 
           pc_to_xml(s)
@@ -545,6 +634,29 @@ class MacroDroid
 
   alias to_json export_json
 
+
+  def to_h()
+
+    @h.merge(macro_list:  @macros.map(&:to_h)).to_camel_case
+
+  end
+  
+  # returns pseudocode
+  #
+  def to_pc()
+    @macros.map(&:to_pc).join("\n\n")
+  end
+
+  def to_s()
+    @macros.map(&:to_s).join("\n")
+  end
+  
+  def to_summary()
+    @macros.map(&:to_summary).join("\n")
+  end  
+  
+  private
+  
   def import_json(s)
 
     h = JSON.parse(s, symbolize_names: true)
@@ -552,11 +664,23 @@ class MacroDroid
     
     @h = h.to_snake_case
     puts ('@h: ' + @h.inspect).debug if @debug
-
+    
+    
+    # fetch the geofence data
+    if @h[:geofence_data] then
+      
+      @geofence = @h[:geofence_data][:geofence_map].map do |id, properties|
+        [id, GeofenceMap.new(properties)]
+      end.to_h
+      
+    end
+    
     @macros = @h[:macro_list].map do |macro|
 
       puts ('macro: ' + macro.inspect).debug if @debug
-      m = Macro.new(debug: @debug)
+      puts '@geofence: ' + @geofence.inspect if @debug
+      
+      m = Macro.new(geofence: @geofence, debug: @debug )
       m.import_h(macro)
       m
 
@@ -612,7 +736,8 @@ class MacroDroid
   
   def text_to_xml(s)
     
-    a = s.split(/.*(?=^m:)/); a.shift
+    a = s.split(/.*(?=^m:)/)
+    puts 'a : ' + a.inspect if @debug
     a.map!(&:chomp)
 
     macros = a.map do |x|
@@ -636,23 +761,18 @@ class MacroDroid
     doc.root.xml pretty: true    
     
   end
+  
 
-  def to_h()
+end
 
-    @h.merge(macro_list:  @macros.map(&:to_h)).to_camel_case
-
+class GeofenceMap
+  
+  attr_accessor :name, :longitude, :latitude, :radius, :id
+  
+  def initialize(h)
+    @id, @latitude, @longitude, @name, @radius = h.values
   end
   
-  # returns pseudocode
-  #
-  def to_pc()
-    @macros.map(&:to_pc).join("\n\n")
-  end
-
-  def to_s()
-    @macros.map(&:to_s).join("\n")
-  end
-
 end
 
 class MacroObject
@@ -662,6 +782,8 @@ class MacroObject
   attr_accessor :options
 
   def initialize(h={})
+    
+    $env ||= {}
     
     @h = {constraint_list: [], is_or_condition: false, 
           is_disabled: false}.merge(h)
@@ -690,6 +812,10 @@ class MacroObject
     
     h2.merge('m_classType' => self.class.to_s)
 
+  end
+  
+  def to_s()
+    "#<%s %s>" % [self.class, @h.inspect]
   end
 
   protected
@@ -1205,27 +1331,20 @@ class TimerTrigger < Trigger
       use_alarm: false
     }
             
-    super(options.merge filter(options,h))
+    super(options.merge filter(options, h))
 
   end
   
   def match?(detail={time: $env[:time]}, model=nil)
-
-    a = @h[:days_of_week]
-    a.unshift a.pop
-
-    dow = a.map.with_index {|x, i| x ? i : nil }.compact.join(',')
-
-    s = "%s %s * * %s" % [@h[:minute], @h[:hour], dow]
     
-    if $debug then
-      puts 's: ' + s.inspect 
-      puts 'detail: ' + detail.inspect
-      puts '@h: ' + @h.inspect
-    end
-    
-    ChronicCron.new(s, detail[:time]).to_time == detail[:time]
+   time() == detail[:time]
 
+  end
+  
+  # sets the environmental conditions for this trigger to fire
+  #
+  def set_env()
+    $env[:time] = time()
   end
   
   def to_pc()    
@@ -1242,6 +1361,20 @@ class TimerTrigger < Trigger
     days = (a[1..-1] << a.first).zip(dow).select {|_,b| b}.map(&:first)
     
     "at %s on %s" % [time, days.join(', ')]
+  end
+  
+  private
+  
+  def time()
+    
+    a = @h[:days_of_week].clone
+    a.unshift a.pop
+
+    dow = a.map.with_index {|x, i| x ? i : nil }.compact.join(',')
+    s = "%s %s * * %s" % [@h[:minute], @h[:hour], dow]        
+    recent_time = ($env && $env[:time]) ? $env[:time] : Time.now
+    ChronicCron.new(s, recent_time).to_time
+    
   end
 
 end
@@ -1622,8 +1755,15 @@ end
 #
 class GeofenceTrigger < Trigger
 
-  def initialize(h={})
+  def initialize(geofence, h={})
 
+    if h[:name] then
+      
+      found = geofence.find {|x| x.name == h[:name]}
+      h[:geofence_id] = found.id
+      
+    end
+    
     options = {
       update_rate_text: '5 Minutes',
       geofence_id: '',
@@ -1632,8 +1772,17 @@ class GeofenceTrigger < Trigger
       enter_area: true
     }
 
-    super(options.merge h)
+    super(options.merge filter(options, h))
+    @geofence = geofence
 
+  end
+  
+  def to_s()
+    
+    puts ' @geofence: ' + @geofence.inspect if $debug   
+    direction = @h[:enter_area] ? 'Entry' : 'Exit'
+    "Geofence %s (%s)" % [direction, @geofence[@h[:geofence_id].to_sym].name]
+    
   end
 
 end
@@ -1939,6 +2088,10 @@ class LaunchActivityAction < ApplicationAction
     super(options.merge h)
 
   end
+  
+  def to_s()
+    'Launch ' + @h[:application_name]
+  end
 
 end
 
@@ -1975,6 +2128,10 @@ class OpenWebPageAction < ApplicationAction
 
     super(options.merge h)
 
+  end
+  
+  def to_s()
+    'HTTP GET'
   end
 
 end
@@ -2059,6 +2216,11 @@ class SetWifiAction < ConnectivityAction
 
     super(options.merge h)
 
+  end
+  
+  def to_s()
+    action = @h[:state] == 0 ? 'Enable' : 'Disable'
+    action + ' Wifi'
   end
 
 end
@@ -2720,6 +2882,10 @@ class PlaySoundAction < MediaAction
     super(options.merge h)
 
   end
+  
+  def to_s()
+    'Play: ' + @h[:file_path]
+  end
 
 end
 
@@ -2924,6 +3090,9 @@ end
 class NotificationAction < NotificationsAction
 
   def initialize(h={})
+    
+    h[:notification_subject] = h[:subject] if h[:subject] 
+    h[:notification_text] = h[:text] if h[:text]
 
     options = {
       ringtone_name: 'Default',
@@ -2939,8 +3108,12 @@ class NotificationAction < NotificationsAction
       run_macro_when_pressed: false
     }
 
-    super(options.merge h)
+    super(options.merge filter(options, h))
 
+  end
+  
+  def to_s()
+    'Display Notification: ' + "%s: %s" % [@h[:notification_subject], @h[:notification_text]]
   end
 
 end
