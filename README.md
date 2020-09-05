@@ -1,3 +1,35 @@
+# Ruby-MacroDroid: Creating a Geofence trigger
+
+    require 'ruby-macrodroid'
+
+    s = "
+    g: Home
+      coordinates: 55.942445,-3.143624
+      radius: 300
+
+    g: Abercorn Crescent
+      coordinates: 55.951543,-3.146184
+      radius: 300
+
+    m: Home again
+    t: Geofence Entry (home)
+    a: Enable Wifi
+    "
+
+    droid = MacroDroid.new(s)
+    File.write '/home/james/homegeo3.mdr', droid.to_json
+
+The above example creates a MacroDroid macro which switches the phone's wifi on whenever it enters the geofence zone.
+
+Notes: 
+
+* After importing the macro into MacroDroid the Geofence Entry requires you to select the zone manually. Once that is done, future macros should work without having to manually confirm the existing geofence zone
+* The home coordinates in this example are obviously not the coordinates for my actual home address.
+
+macrodroid macro geofence trigger wifi zone gps
+
+------------------------------
+
 # Ruby-MacroDroid: Using a constraint within a macro
 
     require 'ruby-macrodroid'
