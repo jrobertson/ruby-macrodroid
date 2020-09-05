@@ -112,6 +112,7 @@ require 'rowx'
 require 'uuid'
 #require 'glw'
 #require 'geozone'
+require 'subunit'
 require 'rxfhelper'
 require 'chronic_cron'
 
@@ -177,7 +178,16 @@ class TriggersNlp
     get /^location (entered|exited) \(([^\)]+)/i do |direction, name|
       enter_area = direction.downcase.to_sym == :entered
       [GeofenceTrigger, {name: name, enter_area: enter_area}]
-    end     
+    end
+    
+    # eg. Proximity Sensor (Near)
+    #
+    get /^Proximity Sensor \(([^\)]+)\)/i do |distance|
+      
+      [ProximityTrigger, {distance: distance}]
+    end    
+
+    
     
   end
 
@@ -269,7 +279,33 @@ class ActionsNlp
     #
     get /webhook|HTTP GET/i do
       [OpenWebPageAction, {}]
-    end       
+    end
+    
+    #a: Keep Device Awake Screen On Until Disabled
+    #
+    get /Keep Device Awake Screen On Until Disabled/i do
+      [KeepAwakeAction, {enabled: true, permanent: true, screen_option: 0}]
+    end
+    
+    
+    #a: Keep Device Awake Screen On 1h 1m 1s
+    #
+    get /Keep Device Awake Screen On ([^$]+)/i do |duration|
+      
+      a = duration.split.map(&:to_i)
+      secs = Subunit.new(units={minutes:60, hours:60, seconds: 60}, a).to_i
+      
+      h = {
+        permanent: true, screen_option: 0, seconds_to_stay_awake_for: secs
+      }
+      [KeepAwakeAction, h]
+    end
+    
+    #a: Disable Keep Awake
+    #
+    get /Disable Keep Awake/i do
+      [KeepAwakeAction, {enabled: false, screen_option: 0}]
+    end    
 
 
   end
@@ -642,11 +678,11 @@ EOF
     
     a = [
       'm: ' + @title,
-      't: ' + @triggers.map(&:to_s).join(", "),
-      'a: ' + @actions.map(&:to_s).join(", "),
+      't: ' + @triggers.map(&:to_summary).join(", "),
+      'a: ' + @actions.map(&:to_summary).join(", "),
     ]
     
-    a <<  'c: ' + @constraints.map(&:to_s).join(", ") if @constraints.any?
+    a <<  'c: ' + @constraints.map(&:to_summary).join(", ") if @constraints.any?
     
     a.join("\n") + "\n"
     
@@ -813,7 +849,16 @@ class MacroDroid
   end
 
   def to_s()
-    @macros.map(&:to_s).join("\n")
+    
+    lines = []
+    
+    if @geofences.any? then
+      lines << @geofences.map {|_, value| 'g: ' + value.to_s}.join("\n\n") + "\n"
+    end
+    
+    lines << @macros.map(&:to_s).join("\n")
+    lines.join("\n")
+    
   end
   
   def to_summary()
@@ -964,6 +1009,13 @@ class GeofenceMap
       name: @name, 
       radius: @radius
     }
+      
+  end
+  
+  def to_s()
+    
+    coordinates = "%s, %s" % [@longitude, @latitude]
+    "%s\n  coordinates: %s\n  radius: %s" % [@name, coordinates, @radius]
     
   end
   
@@ -1011,6 +1063,8 @@ class MacroObject
   def to_s()
     "#<%s %s>" % [self.class, @h.inspect]
   end
+  
+  alias to_summary to_s
 
   protected
   
@@ -1982,7 +2036,7 @@ class GeofenceTrigger < Trigger
     direction = @h[:enter_area] ? 'Entry' : 'Exit'
     
     found = @geofences.find {|x| x.id == @h[:geofence_id]}
-    puts 'found: ' + found.inspect    
+    puts 'found: ' + found.inspect    if @debug 
     label = found ? found.name : 'error: name not found'
 
     "Geofence %s (%s)" % [direction, label]
@@ -2030,7 +2084,27 @@ class ActivityRecognitionTrigger < SensorsTrigger
     }
 
     super(options.merge h)
+    
+    @activity = ['In Vehicle', 'On Bicycle', 'Running', 'Walking', 'Still']    
 
+  end
+  
+  def to_s()
+    activity = @activity[@h[:selected_index]]
+    'Activity - ' + activity
+  end
+  
+  def to_summary
+    
+    activity = @activity[@h[:selected_index]]
+    s = if activity.length > 10 then
+      activity[0..7] + '..'
+    else
+      activity
+    end
+    
+    'Activity - ' + s
+    
   end
 
 end
@@ -2041,13 +2115,32 @@ class ProximityTrigger < SensorsTrigger
 
   def initialize(h={})
 
+    if h[:distance] then
+      
+      case h[:distance].to_sym
+      when :near
+        options[:near] = true
+      end
+    end
+    
     options = {
       near: true,
       selected_option: 0
     }
 
-    super(options.merge h)
+    super(options.merge filter(options,h))
 
+  end
+  
+  def to_s()
+    
+    distance = if @h[:near] then
+      'Near'
+    else
+      'Far'
+    end
+    
+    "Proximity Sensor (%s)" % distance
   end
 
 end
@@ -2651,6 +2744,10 @@ class SpeakTextAction < DeviceAction
 
     super(options.merge h)
 
+  end
+  
+  def to_s()
+    "Speak Text (%s)" % @h[:text_to_say]
   end
 
 end
@@ -3553,6 +3650,10 @@ end
 
 # Category: Screen
 #
+# options:
+#   keep awake, screen on => enabled: true
+#   disable keep awake    => enabled: false
+#
 class KeepAwakeAction < ScreenAction
 
   def initialize(h={})
@@ -3567,7 +3668,30 @@ class KeepAwakeAction < ScreenAction
     super(options.merge h)
 
   end
-
+  
+  def to_s()
+    
+    screen = @h[:screen_option] == 0 ? 'Screen On' : 'Screen Off'
+    
+    if @h[:enabled] then
+    
+      whenx = if @h[:seconds_to_stay_awake_for] == 0 then
+    
+      'Until Disabled'
+      
+      else
+        scnds = @h[:seconds_to_stay_awake_for]
+        Subunit.new(units={minutes:60, hours:60}, seconds: scnds).strfunit("%x")
+      end
+      
+      'Keep Device Awake ' + screen + ' ' + whenx
+      
+    else
+      'Disable Keep Awake'
+    end
+    
+    
+  end
 end
 
 # Category: Screen
