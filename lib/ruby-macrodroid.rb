@@ -2,8 +2,114 @@
 
 # file: ruby-macrodroid.rb
 
-require 'uuid'
+# This file contains the following classes:
+#
+#  ## Nlp classes
+#  
+#  TriggersNlp ActionsNlp ConstraintsNlp
+#  
+#  
+#  ## Macro class
+#  
+#  Macro
+#  
+#  
+#  ## Error class
+#  
+#  MacroDroidError
+#  
+#  
+#  ## Droid class
+#  
+#  MacroDroid
+#  
+#  
+#  ## Map class
+#  
+#  GeofenceMap
+#  
+#  
+#  ## Object class
+#  
+#  MacroObject
+#  
+#  
+#  ## Trigger classes
+#  
+#  Trigger WebHookTrigger WifiConnectionTrigger
+#  ApplicationInstalledRemovedTrigger ApplicationLaunchedTrigger
+#  BatteryLevelTrigger BatteryTemperatureTrigger PowerButtonToggleTrigger
+#  ExternalPowerTrigger CallActiveTrigger IncomingCallTrigger
+#  OutgoingCallTrigger CallEndedTrigger CallMissedTrigger IncomingSMSTrigger
+#  WebHookTrigger WifiConnectionTrigger BluetoothTrigger HeadphonesTrigger
+#  SignalOnOffTrigger UsbDeviceConnectionTrigger WifiSSIDTrigger
+#  CalendarTrigger TimerTrigger StopwatchTrigger DayTrigger
+#  RegularIntervalTrigger DeviceEventsTrigger AirplaneModeTrigger
+#  AutoSyncChangeTrigger DayDreamTrigger DockTrigger FailedLoginTrigger
+#  GPSEnabledTrigger MusicPlayingTrigger DeviceUnlockedTrigger
+#  AutoRotateChangeTrigger ClipboardChangeTrigger BootTrigger
+#  IntentReceivedTrigger NotificationTrigger ScreenOnOffTrigger
+#  SilentModeTrigger WeatherTrigger GeofenceTrigger SunriseSunsetTrigger
+#  SensorsTrigger ActivityRecognitionTrigger ProximityTrigger
+#  ShakeDeviceTrigger FlipDeviceTrigger OrientationTrigger
+#  FloatingButtonTrigger ShortcutTrigger VolumeButtonTrigger
+#  MediaButtonPressedTrigger SwipeTrigger
+#  
+#  
+#  ## Action classes
+#  
+#  Action LocationAction ShareLocationAction ApplicationAction
+#  LaunchActivityAction KillBackgroundAppAction OpenWebPageAction CameraAction
+#  UploadPhotoAction TakePictureAction ConnectivityAction SetWifiAction
+#  SetBluetoothAction SetBluetoothAction SendIntentAction DateTimeAction
+#  SetAlarmClockAction StopWatchAction SayTimeAction DeviceAction
+#  AndroidShortcutsAction ClipboardAction PressBackAction SpeakTextAction
+#  UIInteractionAction VoiceSearchAction DeviceSettingsAction
+#  ExpandCollapseStatusBarAction LaunchHomeScreenAction CameraFlashLightAction
+#  VibrateAction SetAutoRotateAction DayDreamAction SetKeyboardAction
+#  SetKeyguardAction CarModeAction ChangeKeyboardAction SetWallpaperAction
+#  FileAction OpenFileAction LocationAction ForceLocationUpdateAction
+#  ShareLocationAction SetLocationUpdateRateAction LoggingAction
+#  AddCalendarEntryAction LogAction ClearLogAction MediaAction
+#  RecordMicrophoneAction PlaySoundAction MessagingAction SendEmailAction
+#  SendSMSAction UDPCommandAction NotificationsAction ClearNotificationsAction
+#  MessageDialogAction AllowLEDNotificationLightAction
+#  SetNotificationSoundAction SetNotificationSoundAction
+#  SetNotificationSoundAction NotificationAction ToastAction PhoneAction
+#  AnswerCallAction ClearCallLogAction OpenCallLogAction RejectCallAction
+#  MakeCallAction SetRingtoneAction ScreenAction SetBrightnessAction
+#  ForceScreenRotationAction ScreenOnAction DimScreenAction KeepAwakeAction
+#  SetScreenTimeoutAction VolumeAction SilentModeVibrateOffAction
+#  SetVibrateAction VolumeIncrementDecrementAction SpeakerPhoneAction
+#  SetVolumeAction
+#  
+#  
+#  ## Constraint classes
+#  
+#  Constraint TimeOfDayConstraint BatteryLevelConstraint
+#  BatterySaverStateConstraint BatteryTemperatureConstraint
+#  ExternalPowerConstraint BluetoothConstraint GPSEnabledConstraint
+#  LocationModeConstraint SignalOnOffConstraint WifiConstraint
+#  CellTowerConstraint IsRoamingConstraint DataOnOffConstraint
+#  WifiHotSpotConstraint CalendarConstraint DayOfWeekConstraint
+#  TimeOfDayConstraint DayOfMonthConstraint MonthOfYearConstraint
+#  SunsetSunriseConstraint AirplaneModeConstraint AutoRotateConstraint
+#  DeviceLockedConstraint RoamingOnOffConstraint TimeSinceBootConstraint
+#  AutoSyncConstraint NFCStateConstraint IsRootedConstraint VpnConstraint
+#  MacroEnabledConstraint ModeConstraint TriggerThatInvokedConstraint
+#  LastRunTimeConstraint HeadphonesConnectionConstraint MusicActiveConstraint
+#  NotificationPresentConstraint PriorityModeConstraint
+#  NotificationVolumeConstraint InCallConstraint PhoneRingingConstraint
+#  BrightnessConstraint VolumeConstraint SpeakerPhoneConstraint
+#  DarkThemeConstraint ScreenOnOffConstraint VolumeLevelConstraint
+#  FaceUpDownConstraint LightLevelConstraint DeviceOrientationConstraint
+#  ProximitySensorConstraint
+
+
+
 require 'yaml'
+require 'rowx'
+require 'uuid'
 require 'glw'
 require 'geozone'
 require 'rxfhelper'
@@ -65,6 +171,11 @@ class TriggersNlp
 
     get /^Geofence (Entry|Exit) \(([^\)]+)/i do |direction, name|
       enter_area = direction.downcase.to_sym == :entry
+      [GeofenceTrigger, {name: name, enter_area: enter_area}]
+    end     
+    
+    get /^location (entered|exited) \(([^\)]+)/i do |direction, name|
+      enter_area = direction.downcase.to_sym == :entered
       [GeofenceTrigger, {name: name, enter_area: enter_area}]
     end     
     
@@ -153,6 +264,12 @@ class ActionsNlp
       [OpenWebPageAction, url_to_open: url]
       
     end
+    
+    # e.g. webhook entered_kitchen
+    #
+    get /webhook|HTTP GET/i do
+      [OpenWebPageAction, {}]
+    end       
 
 
   end
@@ -337,18 +454,19 @@ class Macro
   end
   
   def import_xml(node)
-    
+
     if @debug then
       puts 'inside Macro#import_xml'
       puts 'node: ' + node.xml.inspect
     end
     
-    @title = node.attributes[:name]
-    @description = node.attributes[:description]
-
     if node.element('triggers') then
-      
+            
       # level 2
+      
+      @title = node.attributes[:name]
+      @description = node.attributes[:description]
+      
       
       # get all the triggers
       @triggers = node.xpath('triggers/*').map do |e|
@@ -385,6 +503,12 @@ class Macro
       
       # Level 1
       
+      puts 'import_xml: inside level 1' if @debug
+      
+      @title = node.text('macro') || node.attributes[:name]
+      
+      #@description = node.attributes[:description]      
+      
       tp = TriggersNlp.new      
       
       @triggers = node.xpath('trigger').map do |e|
@@ -403,11 +527,21 @@ class Macro
       
       @actions = node.xpath('action').map do |e|
         
+        puts 'action e: ' + e.xml.inspect if @debug
         r = ap.find_action e.text
         puts 'found action ' + r.inspect if @debug
         
         if r then
-          r[0].new(r[1])
+          
+          a = e.xpath('item/*')
+          
+          h = if a.any? then
+            a.map {|node| [node.name.to_sym, node.text.to_s]}.to_h
+          else
+            {}
+          end
+          
+          r[0].new(r[1].merge(h))
         end
         
       end      
@@ -570,15 +704,21 @@ class MacroDroid
 
         puts 's: ' + s.inspect if @debug
         
-        xml = if s =~ /m:\s/ then
-          puts 'before text_to_xml' if @debug
-          text_to_xml(s)
+        if s =~ /m(?:acro)?:\s/ then
+          
+          puts 'before RowX.new' if @debug
+
+          s2 = s.gsub(/^m:/,'macro:').gsub(/^t:/,'trigger:')\
+              .gsub(/^a:/,'action:').gsub(/^c:/,'constraint:')
+          xml = RowX.new(s2.gsub(/^#.*/,'')).to_xml
+          import_rowxml(xml)
         elsif s =~ /^# / 
-          pc_to_xml(s)
+          xml = pc_to_xml(s)
+          import_xml(xml)
         else
           raise MacroDroidError, 'invalid input'
         end
-        import_xml(xml)
+        
         @h = build_h
         
 
@@ -690,9 +830,28 @@ class MacroDroid
     
   end
   
+  def import_rowxml(raws)
+   
+    s = RXFHelper.read(raws).first
+    puts 's: ' + s.inspect if $debug
+    doc = Rexle.new(s)
+    puts 'after doc' if $debug
+    
+    @macros = doc.root.xpath('item').map do |node|
+          
+      Macro.new.import_xml(node)
+      
+    end
+
+  end  
+  
   def import_xml(raws)
     
-    puts 'raws: ' + raws.inspect if @debug
+    if @debug then
+      puts 'inside import_xml' 
+      
+      puts 'raws: ' + raws.inspect 
+    end
     s = RXFHelper.read(raws).first
     puts 's: ' + s.inspect if @debug
     doc = Rexle.new(s)
@@ -700,14 +859,10 @@ class MacroDroid
     if @debug then
       puts 'doc: ' + doc.root.xml
     end
-    
-    debug = @debug
-    
+       
     @macros = doc.root.xpath('macro').map do |node|
           
-      macro = Macro.new @title, debug: debug
-      macro.import_xml(node)
-      macro
+      Macro.new.import_xml(node)
       
     end
   end
@@ -732,36 +887,7 @@ class MacroDroid
     doc = Rexle.new([:macros, {}, '', *macros])
     doc.root.xml pretty: true    
     
-  end
-  
-  def text_to_xml(s)
-    
-    a = s.split(/.*(?=^m:)/)
-    puts 'a : ' + a.inspect if @debug
-    a.map!(&:chomp)
-
-    macros = a.map do |x|
-
-      lines = x.lines
-      puts 'lines: ' + lines.inspect if @debug
-      
-      name = lines.shift[/^m: +(.*)/,1]
-      h = {t: [], a: [], c: []}
-
-      lines.each {|line| h[line[0].to_sym] << line[/^\w: +(.*)/,1] }
-      triggers = h[:t].map {|text| [:trigger, {}, text]}
-      actions = h[:a].map {|text| [:action, {}, text]}
-      constraints = h[:c].map {|text| [:constraint, {}, text]}
-
-      [:macro, {name: name},'', *triggers, *actions, *constraints]
-
-    end
-
-    doc = Rexle.new([:macros, {}, '', *macros])
-    doc.root.xml pretty: true    
-    
-  end
-  
+  end  
 
 end
 
@@ -2117,6 +2243,8 @@ end
 class OpenWebPageAction < ApplicationAction
 
   def initialize(h={})
+    
+    h[:url_to_open] = h[:url] if h[:url]
 
     options = {
       variable_to_save_response: {:m_stringValue=>"", :m_name=>"", :m_decimalValue=>0.0, :isLocal=>true, :m_booleanValue=>false, :excludeFromLog=>false, :m_intValue=>0, :m_type=>2},
@@ -2126,12 +2254,12 @@ class OpenWebPageAction < ApplicationAction
       block_next_action: false
     }
 
-    super(options.merge h)
+    super(options.merge filter(options,h))
 
   end
   
   def to_s()
-    'HTTP GET'
+    "HTTP GET\n  url: " + @h[:url_to_open]
   end
 
 end
