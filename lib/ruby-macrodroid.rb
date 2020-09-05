@@ -110,8 +110,8 @@
 require 'yaml'
 require 'rowx'
 require 'uuid'
-require 'glw'
-require 'geozone'
+#require 'glw'
+#require 'geozone'
 require 'rxfhelper'
 require 'chronic_cron'
 
@@ -361,9 +361,9 @@ class Macro
   attr_reader :local_variables, :triggers, :actions, :constraints, :guid
   attr_accessor :title, :description
 
-  def initialize(name=nil, geofence: geofence, debug: false)
+  def initialize(name=nil, geofences: geofences, debug: false)
 
-    @title, @geofence, @debug = name, geofence, debug
+    @title, @geofences, @debug = name, geofences, debug
     
     puts 'inside Macro#initialize' if @debug    
           
@@ -518,7 +518,11 @@ class Macro
         puts 'found trigger ' + r.inspect if @debug
         
         if r then
-          r[0].new(r[1])
+          if r[0] == GeofenceTrigger then
+            GeofenceTrigger.new(r[1], geofences: @geofences)
+          else
+            r[0].new(r[1])
+          end
         end
         
       end
@@ -662,7 +666,7 @@ EOF
     
     if klass == GeofenceTrigger then
       puts 'GeofenceTrigger found'.highlight if $debug
-      klass.new(@geofence, h)
+      GeofenceTrigger.new(h, geofences: @geofences)
     else
       klass.new h
     end
@@ -679,11 +683,13 @@ class MacroDroid
   using ColouredText
   using Params  
 
-  attr_reader :macros, :geofence
+  attr_reader :macros, :geofences
 
   def initialize(obj=nil, debug: false)
 
     @debug = debug    
+    
+    @geofences = {}
     
     if obj then
       
@@ -708,10 +714,25 @@ class MacroDroid
           
           puts 'before RowX.new' if @debug
 
-          s2 = s.gsub(/^m:/,'macro:').gsub(/^t:/,'trigger:')\
-              .gsub(/^a:/,'action:').gsub(/^c:/,'constraint:')
-          xml = RowX.new(s2.gsub(/^#.*/,'')).to_xml
+          s2 = s.gsub(/^g:/,'geofence:').gsub(/^m:/,'macro:')\
+              .gsub(/^t:/,'trigger:').gsub(/^a:/,'action:')\
+              .gsub(/^c:/,'constraint:').gsub(/^#.*/,'')
+          
+          raw_macros, raw_geofences = s2.split(/(?=^macro:)/,2).reverse
+          
+          if raw_geofences then
+            
+            geoxml = RowX.new(raw_geofences).to_xml
+            
+            geodoc = Rexle.new(geoxml)  
+            geofences = geodoc.root.xpath('item/geofence')        
+            @geofences = fetch_geofences(geofences) if geofences.any?          
+            
+          end
+          
+          xml = RowX.new(raw_macros).to_xml
           import_rowxml(xml)
+          
         elsif s =~ /^# / 
           xml = pc_to_xml(s)
           import_xml(xml)
@@ -720,8 +741,6 @@ class MacroDroid
         end
         
         @h = build_h
-        
-
         
       end
       
@@ -777,7 +796,13 @@ class MacroDroid
 
   def to_h()
 
-    @h.merge(macro_list:  @macros.map(&:to_h)).to_camel_case
+    h = {
+      geofence_data: {
+        geofence_map: @geofences.map {|key, value| [key, value.to_h] }.to_h
+      },
+      macro_list:  @macros.map(&:to_h)
+    }
+    @h.merge(h).to_camel_case
 
   end
   
@@ -797,6 +822,32 @@ class MacroDroid
   
   private
   
+  def fetch_geofences(nodes)
+    
+    nodes.map do |e|
+
+      name = e.text.to_s.strip
+      item = e.element('item')
+      coordinates = item.text('coordinates')
+      latitude, longitude = coordinates.split(/, */,2)
+      radius = item.text('radius') 
+      
+      id = UUID.new.generate
+
+      h = {
+        name: name, 
+        longitude: longitude, 
+        latitude: latitude, 
+        radius: radius, 
+        id: id
+      }
+      
+      [id.to_sym, GeofenceMap.new(h)]
+      
+    end.to_h
+
+  end
+  
   def import_json(s)
 
     h = JSON.parse(s, symbolize_names: true)
@@ -809,7 +860,7 @@ class MacroDroid
     # fetch the geofence data
     if @h[:geofence_data] then
       
-      @geofence = @h[:geofence_data][:geofence_map].map do |id, properties|
+      @geofences = @h[:geofence_data][:geofence_map].map do |id, properties|
         [id, GeofenceMap.new(properties)]
       end.to_h
       
@@ -818,9 +869,9 @@ class MacroDroid
     @macros = @h[:macro_list].map do |macro|
 
       puts ('macro: ' + macro.inspect).debug if @debug
-      puts '@geofence: ' + @geofence.inspect if @debug
+#       puts '@geofences: ' + @geofences.inspect if @debug
       
-      m = Macro.new(geofence: @geofence, debug: @debug )
+      m = Macro.new(geofences: @geofences.map(&:last), debug: @debug )
       m.import_h(macro)
       m
 
@@ -833,13 +884,15 @@ class MacroDroid
   def import_rowxml(raws)
    
     s = RXFHelper.read(raws).first
-    puts 's: ' + s.inspect if $debug
+    puts 's: ' + s.inspect if @debug
     doc = Rexle.new(s)
-    puts 'after doc' if $debug
+    puts 'after doc' if @debug    
+    puts 'import_rowxml: @geofences: ' + @geofences.inspect if @debug
+    geofences = @geofences
     
     @macros = doc.root.xpath('item').map do |node|
-          
-      Macro.new.import_xml(node)
+      puts ('geofences: ' + geofences.inspect).highlight if @debug
+      Macro.new(geofences: geofences.map(&:last), debug: @debug).import_xml(node)
       
     end
 
@@ -862,7 +915,7 @@ class MacroDroid
        
     @macros = doc.root.xpath('macro').map do |node|
           
-      Macro.new.import_xml(node)
+      Macro.new(geofences: @geofences.map(&:last), debug: @debug).import_xml(node)
       
     end
   end
@@ -895,8 +948,23 @@ class GeofenceMap
   
   attr_accessor :name, :longitude, :latitude, :radius, :id
   
-  def initialize(h)
-    @id, @latitude, @longitude, @name, @radius = h.values
+  def initialize(id: '', longitude: '', latitude: '', name: '', radius: '')
+    
+    @id, @latitude, @longitude, @name, @radius = id, latitude, \
+        longitude, name, radius    
+    
+  end
+  
+  def to_h()
+    
+    {
+      id: @id, 
+      longitude: @longitude, 
+      latitude: @latitude, 
+      name: @name, 
+      radius: @radius
+    }
+    
   end
   
 end
@@ -1881,12 +1949,12 @@ end
 #
 class GeofenceTrigger < Trigger
 
-  def initialize(geofence, h={})
+  def initialize( h={}, geofences: {})
 
     if h[:name] then
-      
-      found = geofence.find {|x| x.name == h[:name]}
-      h[:geofence_id] = found.id
+      puts ('geofences2: ' + geofences.inspect)
+      found = geofences.find {|x| x.name.downcase == h[:name].downcase}
+      h[:geofence_id] = found.id if found
       
     end
     
@@ -1899,15 +1967,25 @@ class GeofenceTrigger < Trigger
     }
 
     super(options.merge filter(options, h))
-    @geofence = geofence
+    @geofences = geofences
 
   end
   
   def to_s()
     
-    puts ' @geofence: ' + @geofence.inspect if $debug   
+    if $debug then
+      puts ' @geofences: ' + @geofences.inspect
+      puts '@h: ' + @h.inspect
+      puts '@h[:geofence_id]: ' + @h[:geofence_id].inspect
+    end
+    
     direction = @h[:enter_area] ? 'Entry' : 'Exit'
-    "Geofence %s (%s)" % [direction, @geofence[@h[:geofence_id].to_sym].name]
+    
+    found = @geofences.find {|x| x.id == @h[:geofence_id]}
+    puts 'found: ' + found.inspect    
+    label = found ? found.name : 'error: name not found'
+
+    "Geofence %s (%s)" % [direction, label]
     
   end
 
