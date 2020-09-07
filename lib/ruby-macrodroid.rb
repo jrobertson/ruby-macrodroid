@@ -113,7 +113,10 @@ require 'uuid'
 #require 'glw'
 #require 'geozone'
 require 'subunit'
-require 'rxfhelper'
+#require 'rxfhelper'
+require 'requestor'
+eval Requestor.read('http://a0.jamesrobertson.eu/rorb/r/ruby'){|x| x.require 'rxfhelper' }
+
 require 'chronic_cron'
 
 
@@ -659,18 +662,55 @@ EOF
     
   def to_s()
     
+    indent = 0
+    actions = @actions.map do |x|
+
+      s = x.to_s
+      
+      r = if indent <= 0 then
+      
+        "a: %s" % s
+        
+      elsif indent > 0 
+      
+        if s =~ /^Else/ then
+          ('  ' * (indent-1)) + "%s" % s
+        elsif s =~ /^End/
+          indent -= 1
+          ('  ' * indent) + "%s" % s
+        else
+          ('  ' * indent) + "%s" % s
+        end        
+        
+      end
+      
+      if s =~ /^If/i then
+        if indent < 1 then
+          r = "a:\n  %s" % s
+          indent += 1
+        else
+          r = ('  ' * indent) + "%s" % s
+        end
+
+        indent += 1
+      end
+      
+      r
+      
+    end.join("\n")
+    
     a = [
       'm: ' + @title,
       @triggers.map {|x| "t: %s" % x}.join("\n"),
-      @actions.map {|x| "a: %s" % x}.join("\n"),
+      actions,
       @constraints.map {|x| "a: %s" % x}.join("\n")
     ]
     
     if @description and @description.length >= 1 then
-      a.insert(1, 'd: ' + @description)
+      a.insert(1, 'd: ' + @description.gsub(/\n/,"\n  "))
     end
     
-    a.join("\n")
+    a.join("\n") + "\n"
     
   end
   
@@ -719,7 +759,7 @@ class MacroDroid
   using ColouredText
   using Params  
 
-  attr_reader :macros, :geofences
+  attr_reader :macros, :geofences, :yaml
 
   def initialize(obj=nil, debug: false)
 
@@ -897,6 +937,7 @@ class MacroDroid
 
     h = JSON.parse(s, symbolize_names: true)
     puts 'json_to_yaml: ' + h.to_yaml if @debug
+    @yaml = h.to_yaml # helpful for debugging and testing
     
     @h = h.to_snake_case
     puts ('@h: ' + @h.inspect).debug if @debug
@@ -1079,13 +1120,32 @@ class MacroObject
     UUID.new.generate
   end
   
+  def object(h={})
+
+    puts ('inside object h:'  + h.inspect).debug if @debug
+    klass = Object.const_get h[:class_type]
+    puts klass.inspect.highlight if $debug
+    
+    klass.new h
+    
+  end    
+  
 end
 
 class Trigger < MacroObject
-
+  using Params
+  
+  attr_reader :constraints
+  
   def initialize(h={})    
     super({fakeIcon: 0}.merge(h))
     @list << 'fakeIcon'
+        
+    # fetch the constraints                               
+    @constraints = h[:constraint_list].map do |constraint|
+      object(constraint.to_snake_case)
+    end       
+    
   end
   
   def match?(detail={}, model=nil)
@@ -1197,6 +1257,11 @@ class BatteryLevelTrigger < Trigger
 
     super(options.merge h)
 
+  end
+  
+  def to_s()
+    operator = @h[:decreases_to] ? '<=' : '>='    
+    "Battery %s %s%%" % [operator, @h[:battery_level]]
   end
 
 end
@@ -1845,6 +1910,10 @@ class DeviceUnlockedTrigger < DeviceEventsTrigger
     super(options.merge h)
 
   end
+  
+  def to_s()
+    'Screen Unlocked'
+  end
 
 end
 
@@ -2314,9 +2383,17 @@ end
 
 
 class Action < MacroObject
+  using Params
+  
+  attr_reader :constraints  
 
   def initialize(h={})    
     super(h)
+    
+    # fetch the constraints                               
+    @constraints = h[:constraint_list].map do |constraint|
+      object(constraint.to_snake_case)
+    end       
   end
   
   def invoke(s='')    
@@ -2491,6 +2568,64 @@ class TakePictureAction < CameraAction
 
 end
 
+class IfConditionAction < Action
+  
+  def initialize(h={})
+
+    options = {
+      a: true,
+      constraint_list: ''
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s()
+    
+    operator = @h[:is_or_condition] ? 'OR' : 'AND'
+    r = 'If ' + @constraints.map(&:to_s).join(" %s " % operator)
+    puts 'if ... @h ' + @h.inspect
+    r
+    
+  end
+end
+
+class ElseAction < Action
+  
+  def initialize(h={})
+
+    options = {
+      constraint_list: ''
+    }
+
+    super(options.merge h)
+
+  end  
+  
+  def to_s()
+    'Else'
+  end
+  
+end
+
+class EndIfAction < Action
+  
+  def initialize(h={})
+
+    options = {
+      constraint_list: ''
+    }
+
+    super(options.merge h)
+
+  end  
+  
+  def to_s()
+    'End If'
+  end
+  
+end
 
 class ConnectivityAction < Action
   
@@ -2862,6 +2997,17 @@ class VibrateAction < DeviceSettingsAction
 
     super(options.merge h)
 
+  end
+  
+  def to_s()
+    
+    pattern = [
+      'Blip', 'Short Buzz', 'Long Buzz', 'Rapid', 'Slow', 'Increasing', 
+      'Constant', 'Decreasing', 'Final Fantasy', 'Game Over', 'Star Wars',
+      'Mini Blip', 'Micro Blip'
+    ]
+    
+    'Vibrate ' + "(%s)" % pattern[@h[:vibrate_pattern].to_i]
   end
 
 end
@@ -3872,6 +4018,21 @@ class BatteryLevelConstraint < Constraint
     super(options.merge h)
 
   end
+  
+  def to_s()
+    
+    operator = if @h[:greater_than] then
+      '>'
+    elsif @h[:equals]
+      '='
+    else
+      '<'
+    end
+    
+    level = @h[:battery_level]
+    
+    "Battery %s %s%%" % [operator, level]
+  end
 
 end
 
@@ -3923,6 +4084,11 @@ class ExternalPowerConstraint < Constraint
     super(options.merge h)
 
   end
+  
+  def to_s()
+    connection = @h[:external_power] ? 'Connected' : 'Disconnected'
+    'Power ' + connection
+  end
 
 end
 
@@ -3941,6 +4107,12 @@ class BluetoothConstraint < Constraint
     super(options.merge h)
 
   end
+  
+  def to_s()
+    device = @h[:device_name] #== 'Any Device' ? 'Any' : @h[:device_name]
+    "Device Connected (%s)" % device
+  end
+  
 
 end
 
@@ -4265,6 +4437,10 @@ class DeviceLockedConstraint < Constraint
     super(options.merge h)
 
   end
+  
+  def to_s()
+    'Device ' + (@h[:locked] ? 'Locked' : 'Unlocked')
+  end
 
 end
 
@@ -4450,6 +4626,11 @@ class HeadphonesConnectionConstraint < Constraint
 
     super(options.merge h)
 
+  end
+  
+  def to_s()
+    connection = @h[:connected] ? 'Connected' : 'Disconnected'
+    'Headphones ' + connection
   end
 
 end
@@ -4640,6 +4821,10 @@ class ScreenOnOffConstraint < Constraint
     super(options.merge h)
 
   end
+  
+  def to_s()
+    'Screen ' + (@h[:screen_on] ? 'On' : 'Off')
+  end
 
 end
 
@@ -4693,6 +4878,14 @@ class LightLevelConstraint < Constraint
     super(options.merge h)
 
   end
+  
+  def to_s()
+    
+    operator = @h[:light_level] == -1 ? 'Less than' : 'Greater than'    
+    condition = operator + ' ' + @h[:light_level_float].to_s + 'lx'
+    'Light Sensor ' + condition
+    
+  end
 
 end
 
@@ -4724,6 +4917,10 @@ class ProximitySensorConstraint < Constraint
 
     super(options.merge h)
 
+  end
+  
+  def to_s()
+    'Proximity Sensor: ' + (@h[:near] ? 'Near' : 'Far')
   end
 
 end
