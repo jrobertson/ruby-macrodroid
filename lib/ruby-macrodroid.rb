@@ -702,9 +702,10 @@ EOF
     a = [
       'm: ' + @title,
       @triggers.map {|x| "t: %s" % x}.join("\n"),
-      actions,
-      @constraints.map {|x| "a: %s" % x}.join("\n")
+      actions
     ]
+    
+    a << @constraints.map {|x| "c: %s" % x}.join("\n") if @constraints.any?
     
     if @description and @description.length >= 1 then
       a.insert(1, 'd: ' + @description.gsub(/\n/,"\n  "))
@@ -1142,7 +1143,7 @@ class Trigger < MacroObject
     @list << 'fakeIcon'
         
     # fetch the constraints                               
-    @constraints = h[:constraint_list].map do |constraint|
+    @constraints = @h[:constraint_list].map do |constraint|
       object(constraint.to_snake_case)
     end       
     
@@ -2391,7 +2392,7 @@ class Action < MacroObject
     super(h)
     
     # fetch the constraints                               
-    @constraints = h[:constraint_list].map do |constraint|
+    @constraints = @h[:constraint_list].map do |constraint|
       object(constraint.to_snake_case)
     end       
   end
