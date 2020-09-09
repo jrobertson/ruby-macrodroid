@@ -110,13 +110,10 @@
 require 'yaml'
 require 'rowx'
 require 'uuid'
-#require 'glw'
-#require 'geozone'
+require 'glw'
+require 'geozone'
 require 'subunit'
-#require 'rxfhelper'
-require 'requestor'
-eval Requestor.read('http://a0.jamesrobertson.eu/rorb/r/ruby'){|x| x.require 'rxfhelper' }
-
+require 'rxfhelper'
 require 'chronic_cron'
 
 
@@ -138,6 +135,12 @@ class TriggersNlp
   end
 
   def triggers(params) 
+    
+    # e.g. at 7:30pm daily
+    get /^(?:at )?(\d+:\d+(?:[ap]m)?) daily/i do |time, days|
+      [TimerTrigger, {time: time, 
+                      days: %w(Mon Tue Wed Thu Fri Sat Sun).join(', ')}]
+    end       
 
     get /^(?:at )?(\d+:\d+(?:[ap]m)?) (?:on )?(.*)/i do |time, days|
       [TimerTrigger, {time: time, days: days}]
@@ -146,7 +149,7 @@ class TriggersNlp
     # time.is? 'at 18:30pm on Mon or Tue'
     get /^time.is\? ['"](?:at )?(\d+:\d+(?:[ap]m)?) (?:on )?(.*)['"]/i do |time, days|      
       [TimerTrigger, {time: time, days: days.gsub(' or ',', ')}]
-    end
+    end     
     
     get /^shake[ _]device\??$/i do 
       [ShakeDeviceTrigger, {}]
@@ -1667,14 +1670,32 @@ class TimerTrigger < Trigger
   
   def to_s()
     
-    dow = @h[:days_of_week]
+    dow = @h[:days_of_week]        
 
-    a = Date::ABBR_DAYNAMES
-
-    time = Time.parse("%s:%s" % [@h[:hour], @h[:minute]]).strftime("%-H:%M%P")
-    days = (a[1..-1] << a.first).zip(dow).select {|_,b| b}.map(&:first)
+    wd = Date::ABBR_DAYNAMES    
+    a = (wd[1..-1] << wd.first)
     
-    "at %s on %s" % [time, days.join(', ')]
+    a2 = dow.map.with_index.to_a
+    start = a2.find {|x,i| x}.last
+    r = a2[start..-1].take_while {|x,i| x == true}
+    r2 = a2[start..-1].select {|x,i| x}
+    
+    days = if r == r2 then
+    
+      x1, x2 = a2[start].last, a2[r.length-1].last
+      
+      if (x2 - x1) >= 2 then
+        "%s-%s" % [a[x1],a[x2]]
+      else
+        a.zip(dow).select {|_,b| b}.map(&:first).join(', ')
+      end
+    else  
+      a.zip(dow).select {|_,b| b}.map(&:first).join(', ')
+    end
+    
+    time = Time.parse("%s:%s" % [@h[:hour], @h[:minute]]).strftime("%-H:%M%P")    
+    
+    "%s %s" % [time, days]
   end
   
   private
@@ -2692,6 +2713,25 @@ class SetBluetoothAction < ConnectivityAction
 
   end
 
+end
+
+class SetHotspotAction < ConnectivityAction
+  
+  def initialize(h={})
+
+    options = {
+      device_name: "", state: 0, turn_wifi_on: true, use_legacy_mechanism: false, mechanism: 0
+
+    }
+
+    super(options.merge h)
+
+  end
+  
+  def to_s()
+    action = @h[:turn_wifi_on] ? 'Enable' : 'Disable'
+    action + ' Hotspot'
+  end
 end
 
 # Category: Connectivity
