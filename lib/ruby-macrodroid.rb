@@ -112,6 +112,7 @@ require 'rowx'
 require 'uuid'
 require 'glw'
 require 'geozone'
+require 'geocoder'
 require 'subunit'
 require 'rxfhelper'
 require 'chronic_cron'
@@ -748,7 +749,13 @@ EOF
       puts 'GeofenceTrigger found'.highlight if $debug
       GeofenceTrigger.new(h, geofences: @geofences)
     else
-      klass.new h
+      puts 'before klass'
+      h2 = h.merge( macro: self)
+      puts 'h2: ' + h2.inspect      
+      r = klass.new h2 
+
+      r
+      
     end
     
   end
@@ -918,13 +925,23 @@ class MacroDroid
       name = e.text.to_s.strip
       item = e.element('item')
       coordinates = item.text('coordinates')
-      latitude, longitude = coordinates.split(/, */,2)
-      radius = item.text('radius') 
+      location = item.text('location')
+      
+      if not coordinates and location then
+        results = Geocoder.search(location)
+        coordinates = results[0].coordinates.join(', ') if results.any?
+      end
+      
+      if coordinates then
+        latitude, longitude = coordinates.split(/, */,2)
+        radius = item.text('radius')
+      end
       
       id = UUID.new.generate
 
       h = {
         name: name, 
+        location: location,
         longitude: longitude, 
         latitude: latitude, 
         radius: radius, 
@@ -1038,10 +1055,11 @@ class GeofenceMap
   
   attr_accessor :name, :longitude, :latitude, :radius, :id
   
-  def initialize(id: '', longitude: '', latitude: '', name: '', radius: '')
+  def initialize(id: '', longitude: '', latitude: '', name: '', radius: '', 
+                 location: nil)
     
-    @id, @latitude, @longitude, @name, @radius = id, latitude, \
-        longitude, name, radius    
+    @id, @latitude, @longitude, @name, @radius, @location = id, latitude, \
+        longitude, name, radius, location    
     
   end
   
@@ -1059,8 +1077,13 @@ class GeofenceMap
   
   def to_s()
     
-    coordinates = "%s, %s" % [@longitude, @latitude]
-    "%s\n  coordinates: %s\n  radius: %s" % [@name, coordinates, @radius]
+    lines = []
+    coordinates = "%s, %s" % [@latitude, @longitude]
+    lines << "%s" % @name
+    lines << "  location: %s" % @location if @location
+    lines << "  coordinates: %s" % coordinates
+    lines << "  radius: %s" % @radius
+    lines.join("\n")
     
   end
   
@@ -1069,7 +1092,7 @@ end
 class MacroObject
   using ColouredText
   
-  attr_reader :type
+  attr_reader :type, :siguid
   attr_accessor :options
 
   def initialize(h={})
@@ -1103,6 +1126,10 @@ class MacroObject
     
     h2.merge('m_classType' => self.class.to_s)
 
+  end
+  
+  def siguid()
+    @h[:siguid]
   end
   
   def to_s()
@@ -1320,6 +1347,24 @@ class ExternalPowerTrigger < Trigger
 
     super(options.merge h)
 
+  end
+  
+  def to_s()
+    
+    return 'Power Disconnected' unless @h[:power_connected]
+    
+    status = 'Power Connectd'
+    options = if @h[:power_connected_options].all? then
+      'Any'
+    else
+      
+      a = ['Wired (Fast Charge)', 'Wireless', 'Wired (Slow Charge)']
+      @h[:power_connected_options].map.with_index {|x,i| x ? i : nil}\
+          .compact.map {|i| a[i] }.join(' + ')
+      
+    end
+    
+    "%s: %s" % [status, options]
   end
 
 end
@@ -2097,7 +2142,7 @@ class GeofenceTrigger < Trigger
   def initialize( h={}, geofences: {})
 
     if h[:name] then
-      puts ('geofences2: ' + geofences.inspect)
+      puts ('geofences2: ' + geofences.inspect) if $debug
       found = geofences.find {|x| x.name.downcase == h[:name].downcase}
       h[:geofence_id] = found.id if found
       
@@ -2409,12 +2454,15 @@ class Action < MacroObject
   
   attr_reader :constraints  
 
-  def initialize(h={})    
+  def initialize(h={}) 
+    
+    macro = h[:macro]
+    h.delete :macro
     super(h)
     
     # fetch the constraints                               
     @constraints = @h[:constraint_list].map do |constraint|
-      object(constraint.to_snake_case)
+      object(constraint.to_snake_case.merge(macro: macro))
     end       
   end
   
@@ -2593,22 +2641,23 @@ end
 class IfConditionAction < Action
   
   def initialize(h={})
-
+    
     options = {
       a: true,
       constraint_list: ''
     }
+    
+    macro = h[:macro]
+    h2 = options.merge(filter(options,h).merge(macro: macro))
 
-    super(options.merge h)
+    super(h2)
 
   end
 
   def to_s()
     
     operator = @h[:is_or_condition] ? 'OR' : 'AND'
-    r = 'If ' + @constraints.map(&:to_s).join(" %s " % operator)
-    puts 'if ... @h ' + @h.inspect
-    r
+    'If ' + @constraints.map(&:to_s).join(" %s " % operator)
     
   end
 end
@@ -2730,7 +2779,7 @@ class SetHotspotAction < ConnectivityAction
   
   def to_s()
     action = @h[:turn_wifi_on] ? 'Enable' : 'Disable'
-    action + ' Hotspot'
+    action + ' HotSpot'
   end
 end
 
@@ -3992,7 +4041,11 @@ class SetVolumeAction < VolumeAction
     super(options.merge h)
 
   end
-
+  
+  def to_s()
+    volume = @h[:stream_index_array].zip(@h[:stream_volume_array]).to_h[true]
+    'Volume Change ' + "Notification = %s%%" % volume    
+  end
 end
 
 class Constraint < MacroObject
@@ -4620,17 +4673,25 @@ end
 # Category: MacroDroid Specific
 #
 class TriggerThatInvokedConstraint < Constraint
-
+  using ColouredText
+  
   def initialize(h={})
 
+    puts ('h: ' + h.inspect).green
+    @trigger = h[:macro].triggers.find {|x| x.siguid == h[:si_guid_that_invoked] }
+    
     options = {
       not: false,
       si_guid_that_invoked: -4951291100076165433,
       trigger_name: 'Shake Device'
     }
 
-    super(options.merge h)
+    super(options.merge filter(options,h))
 
+  end
+  
+  def to_s()
+    'Trigger Fired: ' + @trigger.to_s
   end
 
 end
@@ -4963,5 +5024,132 @@ class ProximitySensorConstraint < Constraint
   def to_s()
     'Proximity Sensor: ' + (@h[:near] ? 'Near' : 'Far')
   end
+
+end
+
+
+# ----------------------------------------------------------------------------
+
+
+class DroidSim
+
+  class Service
+    def initialize(callback)
+      @callback = callback
+    end
+  end
+
+  class Application < Service
+
+    def closed()
+    end
+    def launched()
+    end
+  end
+
+  class Battery < Service
+
+    def level()
+    end
+
+    def temperature()
+    end
+
+  end
+  class Bluetooth < Service
+
+    def enable()
+      @callback.on_bluetooth_enabled()
+    end
+
+    #def enabled
+    #  @callback.on_bluetooth_enabled()
+    #end
+
+    def enabled?
+    end
+
+    def disabled
+    end
+
+    def disabled?
+    end
+  end
+
+  class Calendar < Service
+    def event(starts, ends)
+    end
+  end
+
+  class DayTime < Service
+
+    def initialie(s)
+    end
+  end
+
+  class Headphones < Service
+    def inserted
+    end
+
+    def removed
+    end
+  end
+
+  class Webhook < Service
+
+    def url()
+      @url
+    end
+
+    def url=(s)
+      @url = s
+    end
+  end
+
+  class Wifi < Service
+    def enabled
+    end
+
+    def disabled
+    end
+
+    def ssid_in_range()
+    end
+
+    def ssid_out_of_range()
+    end
+  end
+
+  class Power < Service
+    def connected()
+    end
+
+    def disconnected()
+    end
+
+    def button_toggle()
+    end
+  end
+
+  class Popup < Service
+    def message(s)
+      puts s
+    end
+  end
+
+
+  attr_reader :bluetooth, :popup
+
+  def initialize()
+
+    @bluetooth = Bluetooth.new self
+    @popup = Popup.new self
+
+  end
+
+  def on_bluetooth_enabled()
+  
+  end
+
 
 end
