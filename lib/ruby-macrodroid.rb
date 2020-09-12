@@ -664,7 +664,7 @@ end
 EOF
   end
     
-  def to_s()
+  def to_s(colour: false)
     
     indent = 0
     actions = @actions.map do |x|
@@ -673,7 +673,11 @@ EOF
       
       r = if indent <= 0 then
       
-        "a: %s" % s
+        if colour then
+          "a".bg_blue.gray.bold + ": %s" % s
+        else
+          "a: %s" % s
+        end
         
       elsif indent > 0 
       
@@ -689,8 +693,15 @@ EOF
       end
       
       if s =~ /^If/i then
+        
         if indent < 1 then
-          r = "a:\n  %s" % s
+          
+          r = if colour then
+            "a".bg_blue.gray.bold + ":\n  %s" % s
+          else
+            "a:\n  %s" % s
+          end
+          
           indent += 1
         else
           r = ('  ' * indent) + "%s" % s
@@ -704,15 +715,21 @@ EOF
     end.join("\n")
     
     a = [
-      'm: ' + @title,
-      @triggers.map {|x| "t: %s" % x}.join("\n"),
+      (colour ? "m".bg_cyan.gray.bold : 'm') + ': ' + @title,
+      @triggers.map {|x| (colour ? "t".bg_red.gray.bold : 't') \
+                     + ": %s" % x}.join("\n"),
       actions
     ]
     
-    a << @constraints.map {|x| "c: %s" % x}.join("\n") if @constraints.any?
+    if @constraints.any? then
+      a << @constraints.map do |x|
+        (colour ? "c".bg_green.gray.bold : 'c') + ": %s" % x
+      end.join("\n") 
+    end
     
     if @description and @description.length >= 1 then
-      a.insert(1, 'd: ' + @description.gsub(/\n/,"\n  "))
+      a.insert(1, (colour ? "d".bg_gray.gray.bold : 'd') + ': ' \
+               + @description.gsub(/\n/,"\n  "))
     end
     
     a.join("\n") + "\n"
@@ -899,15 +916,16 @@ class MacroDroid
     @macros.map(&:to_pc).join("\n\n")
   end
 
-  def to_s()
+  def to_s(colour: false)
     
     lines = []
     
     if @geofences.any? then
-      lines << @geofences.map {|_, value| 'g: ' + value.to_s}.join("\n\n") + "\n"
+      lines << @geofences.map {|_, value| (colour ? "g".green.bold : 'g') \
+                               + ': ' + value.to_s}.join("\n\n") + "\n"
     end
     
-    lines << @macros.map(&:to_s).join("\n")
+    lines << @macros.map {|x| x.to_s(colour: colour)}.join("\n")
     lines.join("\n")
     
   end
@@ -3379,6 +3397,35 @@ class ClearLogAction < LoggingAction
 
 end
 
+class PauseAction < Action
+  
+  def initialize(h={})
+    
+    options = {
+      delay_in_milli_seconds: 0, delay_in_seconds: 1, use_alarm: false
+    }
+    super(h)
+    
+  end  
+  
+  def to_s()
+    
+    su = Subunit.new(units={minutes:60, hours:60}, 
+                     seconds: @h[:delay_in_seconds])
+
+    ms = @h[:delay_in_milli_seconds]
+    
+    duration = if su.to_h.has_key?(:minutes) or (ms < 1) then
+      su.strfunit("%X")
+    else
+      "%s %s ms" % [su.strfunit("%X"), ms]
+    end
+    
+    "Wait " + duration
+  end
+  
+end
+
 class MediaAction < Action
   
   def initialize(h={})
@@ -4871,8 +4918,14 @@ class VolumeConstraint < Constraint
       option: 0
     }
 
-    super(options.merge h)
+    super(options.merge filter(options, h))
 
+  end
+  
+  def to_s()
+    a = ['Volume On', 'Vibrate Only' 'Silent', 'Vibrate or Silent']
+    
+    "Ringer Volume\n  " + a[@h[:option]]
   end
 
 end
