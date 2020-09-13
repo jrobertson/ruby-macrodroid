@@ -200,6 +200,11 @@ class TriggersNlp
 
   alias find_trigger run_route
 
+  def to_s(colour: false)
+    'TriggersNlp ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 class ActionsNlp
@@ -319,6 +324,11 @@ class ActionsNlp
 
   alias find_action run_route
 
+  def to_s(colour: false)
+    'ActionsNlp ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 class ConstraintsNlp
@@ -473,7 +483,8 @@ class Macro
     
     # fetch the triggers
     @triggers = h[:trigger_list].map do |trigger|
-      
+      puts 'trigger: ' + trigger.inspect
+      #exit      
       object(trigger.to_snake_case)
 
     end
@@ -669,7 +680,11 @@ EOF
     indent = 0
     actions = @actions.map do |x|
 
-      s = x.to_s
+      s = x.to_s(colour: colour)
+      if s.lines.length > 1 then
+        lines = s.lines
+        s = lines[0] + lines[1..-1].map {|x| x.prepend ('  ' * indent) }.join
+      end
       
       r = if indent <= 0 then
       
@@ -736,15 +751,38 @@ EOF
     
   end
   
-  def to_summary()
+  def to_summary(colour: false)
     
-    a = [
-      'm: ' + @title,
-      't: ' + @triggers.map(&:to_summary).join(", "),
-      'a: ' + @actions.map(&:to_summary).join(", "),
-    ]
+    if colour then
+      
+      a = [
+        'm'.bg_cyan.gray.bold + ': ' + @title,
+        't'.bg_red.gray.bold + ': ' + @triggers.map \
+      {|x| x.to_summary(colour: false)}.join(", "),
+        'a'.bg_blue.gray.bold + ': ' + @actions.map \
+      {|x| x.to_summary(colour: false)}.join(", ")
+      ]
+      
+      if @constraints.any? then
+        a <<  'c'.bg_green.gray.bold + ': ' + @constraints.map \
+            {|x| x.to_summary(colour: false)}.join(", ") 
+      end      
+      
+    else
+      
+      a = [
+        'm: ' + @title,
+        't: ' + @triggers.map {|x| x.to_summary(colour: false)}.join(", "),
+        'a: ' + @actions.map {|x| x.to_summary(colour: false)}.join(", ")
+      ]
+      
+      if @constraints.any? then
+        a <<  'c: ' + @constraints.map \
+            {|x| x.to_summary(colour: false)}.join(", ") 
+      end
+    end
     
-    a <<  'c: ' + @constraints.map(&:to_summary).join(", ") if @constraints.any?
+    
     
     a.join("\n") + "\n"
     
@@ -758,7 +796,7 @@ EOF
 
   def object(h={})
 
-    puts ('inside object h:'  + h.inspect).debug if @debug
+    puts ('inside object h:'  + h.inspect).debug if @debug  
     klass = Object.const_get h[:class_type]
     puts klass.inspect.highlight if $debug
     
@@ -930,8 +968,8 @@ class MacroDroid
     
   end
   
-  def to_summary()
-    @macros.map(&:to_summary).join("\n")
+  def to_summary(colour: false)
+    @macros.map {|x| x.to_summary(colour: colour)}.join("\n")
   end  
   
   private
@@ -1093,7 +1131,7 @@ class GeofenceMap
       
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     lines = []
     coordinates = "%s, %s" % [@latitude, @longitude]
@@ -1117,8 +1155,9 @@ class MacroObject
     
     $env ||= {}
     
+    @attributes = %i(constraint_list is_or_condition is_disabled siguid)
     @h = {constraint_list: [], is_or_condition: false, 
-          is_disabled: false}.merge(h)
+          is_disabled: false, siguid: nil}.merge(h)
     @list = []
     
     # fetch the class name and convert from camelCase to snake_eyes
@@ -1126,6 +1165,7 @@ class MacroObject
         .gsub(/\B[A-Z][a-z]/){|x| '_' + x.downcase}\
         .gsub(/[a-z][A-Z]/){|x| x[0] + '_' + x[1].downcase}\
         .downcase.to_sym
+    @constraints = []
   end
 
   def to_h()
@@ -1150,8 +1190,17 @@ class MacroObject
     @h[:siguid]
   end
   
-  def to_s()
-    "#<%s %s>" % [self.class, @h.inspect]
+  def to_s(colour: false)
+
+    h = @h.clone    
+    h.delete :macro
+    @s ||= "#<%s %s>" % [self.class, h.inspect]
+    operator = @h[:is_or_condition] ? 'OR' : 'AND'
+    constraints = @constraints.map \
+        {|x| x.to_summary(colour: colour)}.join(" %s " % operator)
+    
+    @s + constraints
+    
   end
   
   alias to_summary to_s
@@ -1160,7 +1209,7 @@ class MacroObject
   
   def filter(options, h)
     
-    (h.keys - options.keys).each {|key| h.delete key }    
+    (h.keys - (options.keys + @attributes.to_a)).each {|key| h.delete key }    
     return h
     
   end
@@ -1221,6 +1270,11 @@ class WebHookTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'WebHookTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Applications
@@ -1252,6 +1306,11 @@ class WifiConnectionTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'WifiConnectionTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Applications
@@ -1272,6 +1331,11 @@ class ApplicationInstalledRemovedTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'ApplicationInstalledRemovedTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Applications
@@ -1290,6 +1354,11 @@ class ApplicationLaunchedTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'ApplicationLaunchedTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Battery/Power
@@ -1308,7 +1377,7 @@ class BatteryLevelTrigger < Trigger
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     operator = @h[:decreases_to] ? '<=' : '>='    
     "Battery %s %s%%" % [operator, @h[:battery_level]]
   end
@@ -1331,6 +1400,11 @@ class BatteryTemperatureTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'BatteryTemperatureTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Battery/Power
@@ -1347,6 +1421,11 @@ class PowerButtonToggleTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'PowerButtonToggleTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -1367,7 +1446,7 @@ class ExternalPowerTrigger < Trigger
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     return 'Power Disconnected' unless @h[:power_connected]
     
@@ -1383,7 +1462,10 @@ class ExternalPowerTrigger < Trigger
     end
     
     "%s: %s" % [status, options]
+
   end
+  
+  alias to_summary to_s
 
 end
 
@@ -1403,6 +1485,11 @@ class CallActiveTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'CallActiveTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Call/SMS
@@ -1423,6 +1510,11 @@ class IncomingCallTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'IncomingCallTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Call/SMS
@@ -1443,6 +1535,11 @@ class OutgoingCallTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'OutgoingCallTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Call/SMS
@@ -1463,6 +1560,11 @@ class CallEndedTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'CallEndedTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Call/SMS
@@ -1479,6 +1581,11 @@ class CallMissedTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'CallMissedTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Call/SMS
@@ -1503,6 +1610,11 @@ class IncomingSMSTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'IncomingSMSTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -1519,6 +1631,11 @@ class WebHookTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'WebHookTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -1536,6 +1653,11 @@ class WifiConnectionTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'WifiConnectionTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -1554,6 +1676,11 @@ class BluetoothTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'BluetoothTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -1571,6 +1698,11 @@ class HeadphonesTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'HeadphonesTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -1587,6 +1719,11 @@ class SignalOnOffTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'SignalOnOffTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -1603,6 +1740,11 @@ class UsbDeviceConnectionTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'UsbDeviceConnectionTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -1640,6 +1782,11 @@ class WifiSSIDTrigger < Trigger
     
   end
 
+  def to_s(colour: false)
+    'WifiSSIDTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -1666,6 +1813,11 @@ class CalendarTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'CalendarTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -1703,7 +1855,7 @@ class TimerTrigger < Trigger
     
     #puts ('h: ' + h.inspect).debug
 
-    options = {
+    @options = {
       alarm_id: uuid(),
       days_of_week: [false, false, false, false, false, false, false],
       minute: 10,
@@ -1711,7 +1863,8 @@ class TimerTrigger < Trigger
       use_alarm: false
     }
             
-    super(options.merge filter(options, h))
+    #super(options.merge filter(options, h))
+    super(@options.merge h)
 
   end
   
@@ -1731,7 +1884,7 @@ class TimerTrigger < Trigger
     "time.is? '%s'" % self.to_s.gsub(',', ' or')
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     dow = @h[:days_of_week]        
 
@@ -1756,10 +1909,12 @@ class TimerTrigger < Trigger
       a.zip(dow).select {|_,b| b}.map(&:first).join(', ')
     end
     
-    time = Time.parse("%s:%s" % [@h[:hour], @h[:minute]]).strftime("%-H:%M%P")    
+    time = Time.parse("%s:%s" % [@h[:hour], @h[:minute]]).strftime("%H:%M")    
     
     "%s %s" % [time, days]
   end
+  
+  alias to_summary to_s
   
   private
   
@@ -1792,6 +1947,11 @@ class StopwatchTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'StopwatchTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -1820,6 +1980,11 @@ class DayTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'DayTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -1843,6 +2008,11 @@ class RegularIntervalTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'RegularIntervalTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 class DeviceEventsTrigger < Trigger
@@ -1877,6 +2047,11 @@ class AirplaneModeTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'AirplaneModeTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Events
@@ -1893,6 +2068,11 @@ class AutoSyncChangeTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'AutoSyncChangeTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Events
@@ -1909,6 +2089,11 @@ class DayDreamTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'DayDreamTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Events
@@ -1925,6 +2110,11 @@ class DockTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'DockTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Events
@@ -1945,7 +2135,7 @@ class FailedLoginTrigger < DeviceEventsTrigger
     'failed_login?'
   end
 
-  def to_s()
+  def to_s(colour: false)
     'Failed Login Attempt'
   end
 end
@@ -1964,6 +2154,11 @@ class GPSEnabledTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'GPSEnabledTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Events
@@ -1980,6 +2175,11 @@ class MusicPlayingTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'MusicPlayingTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -1996,9 +2196,11 @@ class DeviceUnlockedTrigger < DeviceEventsTrigger
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     'Screen Unlocked'
   end
+  
+  alias to_summary to_s
 
 end
 
@@ -2016,6 +2218,11 @@ class AutoRotateChangeTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'AutoRotateChangeTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Events
@@ -2033,6 +2240,11 @@ class ClipboardChangeTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'ClipboardChangeTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Events
@@ -2048,6 +2260,11 @@ class BootTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'BootTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Events
@@ -2068,6 +2285,11 @@ class IntentReceivedTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'IntentReceivedTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Events
@@ -2094,6 +2316,11 @@ class NotificationTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'NotificationTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Events
@@ -2109,6 +2336,12 @@ class ScreenOnOffTrigger < DeviceEventsTrigger
     super(options.merge h)
 
   end
+  
+  def to_s(colour: false)
+    'Screen ' + (@h[:screen_on] ? 'On' : 'Off')
+  end
+  
+  alias to_summary to_s
 
 end
 
@@ -2126,6 +2359,11 @@ class SilentModeTrigger < DeviceEventsTrigger
 
   end
 
+  def to_s(colour: false)
+    'SilentModeTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Location
@@ -2151,6 +2389,11 @@ class WeatherTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'WeatherTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Location
@@ -2179,7 +2422,7 @@ class GeofenceTrigger < Trigger
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     if $debug then
       puts ' @geofences: ' + @geofences.inspect
@@ -2214,6 +2457,11 @@ class SunriseSunsetTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'SunriseSunsetTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -2243,12 +2491,12 @@ class ActivityRecognitionTrigger < SensorsTrigger
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     activity = @activity[@h[:selected_index]]
     'Activity - ' + activity
   end
   
-  def to_summary
+  def to_summary(colour: false)
     
     activity = @activity[@h[:selected_index]]
     s = if activity.length > 10 then
@@ -2286,7 +2534,7 @@ class ProximityTrigger < SensorsTrigger
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     distance = if @h[:near] then
       'Near'
@@ -2316,7 +2564,7 @@ class ShakeDeviceTrigger < SensorsTrigger
     'shake_device?'
   end
   
-  def to_s()
+  def to_s(colour: false)
     'Shake Device'
   end
 
@@ -2347,7 +2595,7 @@ class FlipDeviceTrigger < SensorsTrigger
     @h[:face_down] ? 'flip_device_down?' : 'flip_device_up?'
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     action = @h[:face_down] ? 'Face Up -> Face Down' : 'Face Down -> Face Up'
     'Flip Device ' + action
@@ -2370,6 +2618,11 @@ class OrientationTrigger < SensorsTrigger
 
   end
 
+  def to_s(colour: false)
+    'OrientationTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: User Input
@@ -2395,6 +2648,11 @@ class FloatingButtonTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'FloatingButtonTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: User Input
@@ -2410,6 +2668,11 @@ class ShortcutTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'ShortcutTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: User Input
@@ -2427,6 +2690,33 @@ class VolumeButtonTrigger < Trigger
 
     super(options.merge h)
 
+  end
+  
+  def to_s(colour: false)
+    
+    a = [
+      'Volume Up', 
+      'Volume Down',
+      'Volume Up - Long Press', 
+      'Volume Down - Long Press'
+    ]
+    
+    lines = [a[@h[:option]]]
+    lines << '  ' + (@h[:dont_change_volume] ? 'Retain Previous Volume' : 'Update Volume')
+    @s = lines.join("\n")
+  end
+  
+  def to_summary(colour: false)
+    a = [
+      'Volume Up', 
+      'Volume Down',
+      'Volume Up - Long Press', 
+      'Volume Down - Long Press'
+    ]
+    
+    lines = [a[@h[:option]]]
+    lines << (@h[:dont_change_volume] ? 'Retain Previous Volume' : 'Update Volume')
+    @s = lines.join(": ")    
   end
 
 end
@@ -2446,6 +2736,11 @@ class MediaButtonPressedTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'MediaButtonPressedTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: User Input
@@ -2464,6 +2759,11 @@ class SwipeTrigger < Trigger
 
   end
 
+  def to_s(colour: false)
+    'SwipeTrigger ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -2487,7 +2787,20 @@ class Action < MacroObject
   def invoke(s='')    
     "%s/%s: %s" % [@group, @type, s]
   end  
+  
+  def to_s(colour: false)
 
+    h = @h.clone    
+    h.delete :macro
+    @s ||= "#<%s %s>" % [self.class, h.inspect]
+    operator = @h[:is_or_condition] ? 'OR' : 'AND'
+    constraints = @constraints.map \
+        {|x| x.to_summary(colour: colour)}.join(" %s " % operator)
+    
+    @s + constraints
+    
+  end  
+  
 end
 
 
@@ -2522,6 +2835,11 @@ class ShareLocationAction < LocationAction
 
   end
 
+  def to_s(colour: false)
+    'ShareLocationAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -2551,7 +2869,7 @@ class LaunchActivityAction < ApplicationAction
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     'Launch ' + @h[:application_name]
   end
 
@@ -2572,6 +2890,11 @@ class KillBackgroundAppAction < ApplicationAction
 
   end
 
+  def to_s(colour: false)
+    'KillBackgroundAppAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Applications
@@ -2594,7 +2917,7 @@ class OpenWebPageAction < ApplicationAction
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     "HTTP GET\n  url: " + @h[:url_to_open]
   end
 
@@ -2625,6 +2948,11 @@ class UploadPhotoAction < CameraAction
 
   end
 
+  def to_s(colour: false)
+    'UploadPhotoAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Camera/Photo
@@ -2650,7 +2978,7 @@ class TakePictureAction < CameraAction
     'take_photo :' + camera.to_s
   end
 
-  def to_s()
+  def to_s(colour: false)
     'Take Picture'
   end  
 
@@ -2669,13 +2997,15 @@ class IfConditionAction < Action
     h2 = options.merge(filter(options,h).merge(macro: macro))
 
     super(h2)
+    
+    @label = 'If '
 
   end
 
-  def to_s()
+  def to_s(colour: false)
     
-    operator = @h[:is_or_condition] ? 'OR' : 'AND'
-    'If ' + @constraints.map(&:to_s).join(" %s " % operator)
+    @s = "If " #+ @constraints.map(&:to_s).join(" %s " % operator)
+    super(colour: colour)
     
   end
 end
@@ -2689,14 +3019,32 @@ class ElseAction < Action
     }
 
     super(options.merge h)
+    
 
   end  
   
-  def to_s()
+  def to_s(colour: false)
     'Else'
   end
   
 end
+
+class ElseIfConditionAction < IfConditionAction
+  
+  def initialize(h={})
+
+    options = {
+      constraint_list: ''
+    }
+
+    super(options.merge h)
+    @label = 'ElseIf '
+
+  end  
+    
+
+end
+
 
 class EndIfAction < Action
   
@@ -2710,7 +3058,7 @@ class EndIfAction < Action
 
   end  
   
-  def to_s()
+  def to_s(colour: false)
     'End If'
   end
   
@@ -2723,6 +3071,31 @@ class ConnectivityAction < Action
     @group = 'connectivity'
   end
   
+end
+
+# Category: Connectivity
+#
+class SetAirplaneModeAction < ConnectivityAction
+
+  def initialize(h={})
+
+    options = {
+      device_name: '',
+      state: 1
+    }
+
+    super(options.merge h)
+
+  end
+  
+  def to_s(colour: false)
+    
+    state = ['On', 'Off', 'Toggle'][@h[:state]]
+    @s = 'Airplane Mode ' + state + "\n"
+    super(colour: colour)
+    
+  end
+
 end
 
 # Category: Connectivity
@@ -2741,7 +3114,7 @@ class SetWifiAction < ConnectivityAction
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     action = @h[:state] == 0 ? 'Enable' : 'Disable'
     action + ' Wifi'
   end
@@ -2763,6 +3136,11 @@ class SetBluetoothAction < ConnectivityAction
 
   end
 
+  def to_s(colour: false)
+    'SetBluetoothAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -2780,6 +3158,11 @@ class SetBluetoothAction < ConnectivityAction
 
   end
 
+  def to_s(colour: false)
+    'SetBluetoothAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 class SetHotspotAction < ConnectivityAction
@@ -2795,7 +3178,7 @@ class SetHotspotAction < ConnectivityAction
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     action = @h[:turn_wifi_on] ? 'Enable' : 'Disable'
     action + ' HotSpot'
   end
@@ -2827,6 +3210,11 @@ class SendIntentAction < ConnectivityAction
 
   end
 
+  def to_s(colour: false)
+    'SendIntentAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -2862,6 +3250,11 @@ class SetAlarmClockAction < DateTimeAction
 
   end
 
+  def to_s(colour: false)
+    'SetAlarmClockAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -2879,6 +3272,11 @@ class StopWatchAction < DateTimeAction
 
   end
 
+  def to_s(colour: false)
+    'StopWatchAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -2905,7 +3303,7 @@ class SayTimeAction < DateTimeAction
     'say current_time()'
   end
   
-  def to_s()
+  def to_s(colour: false)
     'Say Current Time'
   end  
 
@@ -2935,6 +3333,11 @@ class AndroidShortcutsAction < DeviceAction
 
   end
 
+  def to_s(colour: false)
+    'AndroidShortcutsAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Actions
@@ -2951,6 +3354,11 @@ class ClipboardAction < DeviceAction
 
   end
 
+  def to_s(colour: false)
+    'ClipboardAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Actions
@@ -2966,6 +3374,11 @@ class PressBackAction < DeviceAction
 
   end
 
+  def to_s(colour: false)
+    'PressBackAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Actions
@@ -2989,7 +3402,7 @@ class SpeakTextAction < DeviceAction
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     "Speak Text (%s)" % @h[:text_to_say]
   end
 
@@ -3010,6 +3423,11 @@ class UIInteractionAction < DeviceAction
 
   end
 
+  def to_s(colour: false)
+    'UIInteractionAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Actions
@@ -3025,6 +3443,11 @@ class VoiceSearchAction < DeviceAction
 
   end
 
+  def to_s(colour: false)
+    'VoiceSearchAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -3051,6 +3474,11 @@ class ExpandCollapseStatusBarAction < DeviceSettingsAction
 
   end
 
+  def to_s(colour: false)
+    'ExpandCollapseStatusBarAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Settings
@@ -3066,6 +3494,11 @@ class LaunchHomeScreenAction < DeviceSettingsAction
 
   end
 
+  def to_s(colour: false)
+    'LaunchHomeScreenAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Settings
@@ -3084,11 +3517,11 @@ class CameraFlashLightAction < DeviceSettingsAction
   end
 
   def to_pc()
-    'torch :on'
+    ['torch :on', 'torch :off', 'torch :toggle'][@h[:state]]
   end
   
-  def to_s()
-    'Torch On'
+  def to_s(colour: false)
+    ['Torch On', 'Torch Off', 'Torch Toggle'][@h[:state]]    
   end  
 
 end
@@ -3107,7 +3540,7 @@ class VibrateAction < DeviceSettingsAction
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     pattern = [
       'Blip', 'Short Buzz', 'Long Buzz', 'Rapid', 'Slow', 'Increasing', 
@@ -3134,6 +3567,11 @@ class SetAutoRotateAction < DeviceSettingsAction
 
   end
 
+  def to_s(colour: false)
+    'SetAutoRotateAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Settings
@@ -3149,6 +3587,11 @@ class DayDreamAction < DeviceSettingsAction
 
   end
 
+  def to_s(colour: false)
+    'DayDreamAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Settings
@@ -3164,6 +3607,11 @@ class SetKeyboardAction < DeviceSettingsAction
 
   end
 
+  def to_s(colour: false)
+    'SetKeyboardAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Settings
@@ -3180,6 +3628,11 @@ class SetKeyguardAction < DeviceSettingsAction
 
   end
 
+  def to_s(colour: false)
+    'SetKeyguardAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Settings
@@ -3196,6 +3649,11 @@ class CarModeAction < DeviceSettingsAction
 
   end
 
+  def to_s(colour: false)
+    'CarModeAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Settings
@@ -3213,6 +3671,11 @@ class ChangeKeyboardAction < DeviceSettingsAction
 
   end
 
+  def to_s(colour: false)
+    'ChangeKeyboardAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device Settings
@@ -3234,6 +3697,11 @@ class SetWallpaperAction < DeviceSettingsAction
 
   end
 
+  def to_s(colour: false)
+    'SetWallpaperAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 class FileAction < Action
@@ -3262,6 +3730,11 @@ class OpenFileAction < FileAction
 
   end
 
+  def to_s(colour: false)
+    'OpenFileAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -3287,6 +3760,11 @@ class ForceLocationUpdateAction < LocationAction
 
   end
 
+  def to_s(colour: false)
+    'ForceLocationUpdateAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Location
@@ -3307,6 +3785,11 @@ class ShareLocationAction < LocationAction
 
   end
 
+  def to_s(colour: false)
+    'ShareLocationAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Location
@@ -3324,6 +3807,11 @@ class SetLocationUpdateRateAction < LocationAction
 
   end
 
+  def to_s(colour: false)
+    'SetLocationUpdateRateAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 class LoggingAction < Action
@@ -3362,6 +3850,11 @@ class AddCalendarEntryAction < LoggingAction
 
   end
 
+  def to_s(colour: false)
+    'AddCalendarEntryAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Logging
@@ -3379,6 +3872,11 @@ class LogAction < LoggingAction
 
   end
 
+  def to_s(colour: false)
+    'LogAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Logging
@@ -3395,6 +3893,11 @@ class ClearLogAction < LoggingAction
 
   end
 
+  def to_s(colour: false)
+    'ClearLogAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 class PauseAction < Action
@@ -3408,7 +3911,7 @@ class PauseAction < Action
     
   end  
   
-  def to_s()
+  def to_s(colour: false)
     
     su = Subunit.new(units={minutes:60, hours:60}, 
                      seconds: @h[:delay_in_seconds])
@@ -3452,6 +3955,11 @@ class RecordMicrophoneAction < MediaAction
 
   end
 
+  def to_s(colour: false)
+    'RecordMicrophoneAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Media
@@ -3469,7 +3977,7 @@ class PlaySoundAction < MediaAction
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     'Play: ' + @h[:file_path]
   end
 
@@ -3505,6 +4013,11 @@ class SendEmailAction < MessagingAction
 
   end
 
+  def to_s(colour: false)
+    'SendEmailAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Messaging
@@ -3526,6 +4039,11 @@ class SendSMSAction < MessagingAction
 
   end
 
+  def to_s(colour: false)
+    'SendSMSAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Messaging
@@ -3544,6 +4062,11 @@ class UDPCommandAction < MessagingAction
 
   end
 
+  def to_s(colour: false)
+    'UDPCommandAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -3578,6 +4101,11 @@ class ClearNotificationsAction < NotificationsAction
 
   end
 
+  def to_s(colour: false)
+    'ClearNotificationsAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Notifications
@@ -3604,6 +4132,10 @@ class MessageDialogAction < NotificationsAction
     super(options.merge h)
 
   end
+  
+  def to_s(colour: false)
+    'Display Dialog' + "\n  Battery at: [battery]"
+  end
 
 end
 
@@ -3621,6 +4153,11 @@ class AllowLEDNotificationLightAction < NotificationsAction
 
   end
 
+  def to_s(colour: false)
+    'AllowLEDNotificationLightAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Notifications
@@ -3637,6 +4174,11 @@ class SetNotificationSoundAction < NotificationsAction
 
   end
 
+  def to_s(colour: false)
+    'SetNotificationSoundAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Notifications
@@ -3653,6 +4195,11 @@ class SetNotificationSoundAction < NotificationsAction
 
   end
 
+  def to_s(colour: false)
+    'SetNotificationSoundAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Notifications
@@ -3669,6 +4216,11 @@ class SetNotificationSoundAction < NotificationsAction
 
   end
 
+  def to_s(colour: false)
+    'SetNotificationSoundAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Notifications
@@ -3698,7 +4250,7 @@ class NotificationAction < NotificationsAction
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     'Display Notification: ' + "%s: %s" % [@h[:notification_subject], @h[:notification_text]]
   end
 
@@ -3738,7 +4290,7 @@ class ToastAction < NotificationsAction
     "popup_message '%s'" % @h[:message_text]
   end
   
-  def to_s()
+  def to_s(colour: false)
     "Popup Message '%s'" % @h[:message_text]
   end
 
@@ -3767,7 +4319,11 @@ class AnswerCallAction < PhoneAction
     super(options.merge h)
 
   end
-
+  
+  def to_s(colour: false)
+    @s = 'Answer Call' + "\n  "
+    super()
+  end
 end
 
 # Category: Phone
@@ -3786,6 +4342,11 @@ class ClearCallLogAction < PhoneAction
 
   end
 
+  def to_s(colour: false)
+    'ClearCallLogAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Phone
@@ -3801,6 +4362,11 @@ class OpenCallLogAction < PhoneAction
 
   end
 
+  def to_s(colour: false)
+    'OpenCallLogAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Phone
@@ -3814,6 +4380,11 @@ class RejectCallAction < PhoneAction
 
     super(options.merge h)
 
+  end
+  
+  def to_s(colour: false)
+    @s = 'Call Reject' + "\n  "
+    super()
   end
 
 end
@@ -3833,6 +4404,11 @@ class MakeCallAction < PhoneAction
 
   end
 
+  def to_s(colour: false)
+    'MakeCallAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -3850,6 +4426,11 @@ class SetRingtoneAction < PhoneAction
 
   end
 
+  def to_s(colour: false)
+    'SetRingtoneAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 class ScreenAction < Action
@@ -3877,6 +4458,11 @@ class SetBrightnessAction < ScreenAction
 
   end
 
+  def to_s(colour: false)
+    'SetBrightnessAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Screen
@@ -3893,6 +4479,11 @@ class ForceScreenRotationAction < ScreenAction
 
   end
 
+  def to_s(colour: false)
+    'ForceScreenRotationAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Screen
@@ -3912,6 +4503,11 @@ class ScreenOnAction < ScreenAction
 
   end
 
+  def to_s(colour: false)
+    'ScreenOnAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Screen
@@ -3929,6 +4525,11 @@ class DimScreenAction < ScreenAction
 
   end
 
+  def to_s(colour: false)
+    'DimScreenAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Screen
@@ -3952,7 +4553,7 @@ class KeepAwakeAction < ScreenAction
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     screen = @h[:screen_option] == 0 ? 'Screen On' : 'Screen Off'
     
@@ -3993,6 +4594,11 @@ class SetScreenTimeoutAction < ScreenAction
 
   end
 
+  def to_s(colour: false)
+    'SetScreenTimeoutAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -4019,6 +4625,11 @@ class SilentModeVibrateOffAction < VolumeAction
 
   end
 
+  def to_s(colour: false)
+    'SilentModeVibrateOffAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Volume
@@ -4036,6 +4647,27 @@ class SetVibrateAction < VolumeAction
 
   end
 
+  def to_s(colour: false)
+    
+    a = [
+      'Silent (Vibrate On)',
+      'Normal (Vibrate Off)',
+      'Vibrate when ringing On',
+      'Vibrate when ringing Off',
+      'Vibrate when ringing Toggle'
+    ]
+    
+    status = a[@h[:option_int]]
+    @s = 'Vibrate Enable/Disable ' + "\n    " + status + "\n  "
+    super()
+    
+  end
+
+  def to_summary(colour: false)
+    
+    @s = 'Vibrate Enable/Disable'
+    
+  end
 end
 
 # Category: Volume
@@ -4052,6 +4684,11 @@ class VolumeIncrementDecrementAction < VolumeAction
 
   end
 
+  def to_s(colour: false)
+    'VolumeIncrementDecrementAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Volume
@@ -4069,6 +4706,11 @@ class SpeakerPhoneAction < VolumeAction
 
   end
 
+  def to_s(colour: false)
+    'SpeakerPhoneAction ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Volume
@@ -4089,7 +4731,7 @@ class SetVolumeAction < VolumeAction
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     volume = @h[:stream_index_array].zip(@h[:stream_volume_array]).to_h[true]
     'Volume Change ' + "Notification = %s%%" % volume    
   end
@@ -4105,7 +4747,7 @@ class Constraint < MacroObject
 
     detail.select {|k,v| @h.include? k }.all? {|key,value| @h[key] == value}
 
-  end
+  end  
   
   #def to_s()
   #  ''
@@ -4127,22 +4769,7 @@ class Constraint < MacroObject
 
 end
 
-class TimeOfDayConstraint < Constraint
 
-  def initialize(h={})
-
-    options = {
-      end_hour: 8,
-      end_minute: 0,
-      start_hour: 22,
-      start_minute: 0
-    }
-
-    super(options.merge h)
-
-  end
-
-end
 
 # Category: Battery/Power
 #
@@ -4160,7 +4787,7 @@ class BatteryLevelConstraint < Constraint
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     operator = if @h[:greater_than] then
       '>'
@@ -4174,6 +4801,8 @@ class BatteryLevelConstraint < Constraint
     
     "Battery %s %s%%" % [operator, level]
   end
+  
+  alias to_summary to_s
 
 end
 
@@ -4191,6 +4820,11 @@ class BatterySaverStateConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'BatterySaverStateConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Battery/Power
@@ -4209,6 +4843,11 @@ class BatteryTemperatureConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'BatteryTemperatureConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Battery/Power
@@ -4226,7 +4865,7 @@ class ExternalPowerConstraint < Constraint
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     connection = @h[:external_power] ? 'Connected' : 'Disconnected'
     'Power ' + connection
   end
@@ -4249,11 +4888,12 @@ class BluetoothConstraint < Constraint
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     device = @h[:device_name] #== 'Any Device' ? 'Any' : @h[:device_name]
     "Device Connected (%s)" % device
   end
   
+  alias to_summary to_s
 
 end
 
@@ -4271,6 +4911,11 @@ class GPSEnabledConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'GPSEnabledConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -4287,6 +4932,11 @@ class LocationModeConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'LocationModeConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -4303,6 +4953,11 @@ class SignalOnOffConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'SignalOnOffConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -4320,6 +4975,11 @@ class WifiConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'WifiConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -4338,6 +4998,11 @@ class CellTowerConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'CellTowerConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -4354,6 +5019,11 @@ class IsRoamingConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'IsRoamingConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -4370,6 +5040,11 @@ class DataOnOffConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'DataOnOffConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Connectivity
@@ -4389,6 +5064,11 @@ class WifiHotSpotConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'WifiHotSpotConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -4412,6 +5092,11 @@ class CalendarConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'CalendarConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -4428,6 +5113,11 @@ class DayOfWeekConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'DayOfWeekConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -4437,16 +5127,22 @@ class TimeOfDayConstraint < Constraint
   def initialize(h={})
 
     options = {
-      end_hour: 1,
-      end_minute: 1,
-      start_hour: 21,
-      start_minute: 58
+      end_hour: 8,
+      end_minute: 0,
+      start_hour: 22,
+      start_minute: 0
     }
 
     super(options.merge h)
 
   end
-
+  
+  def to_s(colour: false)
+    a = @h[:start_hour], @h[:start_minute], @h[:end_hour], @h[:start_minute]
+    'Time of Day ' + "%02d:%02d - %02d:%02d" % a    
+  end
+  
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -4464,6 +5160,11 @@ class DayOfMonthConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'DayOfMonthConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -4480,6 +5181,11 @@ class MonthOfYearConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'MonthOfYearConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Date/Time
@@ -4496,6 +5202,11 @@ class SunsetSunriseConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'SunsetSunriseConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device State
@@ -4540,12 +5251,14 @@ class AirplaneModeConstraint < Constraint
     'airplane_mode.' + status
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     status = @h[:enabled] ? 'Enabled' : 'Disabled'
     'Airplane Mode ' + status
     
   end
+  
+  alias to_summary to_s
 
 end
 
@@ -4563,6 +5276,11 @@ class AutoRotateConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'AutoRotateConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device State
@@ -4579,9 +5297,11 @@ class DeviceLockedConstraint < Constraint
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     'Device ' + (@h[:locked] ? 'Locked' : 'Unlocked')
   end
+  
+  alias to_summary to_s
 
 end
 
@@ -4599,6 +5319,11 @@ class RoamingOnOffConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'RoamingOnOffConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device State
@@ -4616,6 +5341,11 @@ class TimeSinceBootConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'TimeSinceBootConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device State
@@ -4632,6 +5362,11 @@ class AutoSyncConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'AutoSyncConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device State
@@ -4648,6 +5383,11 @@ class NFCStateConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'NFCStateConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device State
@@ -4664,6 +5404,11 @@ class IsRootedConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'IsRootedConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Device State
@@ -4680,6 +5425,11 @@ class VpnConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'VpnConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: MacroDroid Specific
@@ -4698,6 +5448,11 @@ class MacroEnabledConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'MacroEnabledConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: MacroDroid Specific
@@ -4715,6 +5470,11 @@ class ModeConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'ModeConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: MacroDroid Specific
@@ -4733,13 +5493,23 @@ class TriggerThatInvokedConstraint < Constraint
       trigger_name: 'Shake Device'
     }
 
-    super(options.merge filter(options,h))
+    #super(options.merge filter(options,h))
+    super(options.merge h)
 
   end
   
-  def to_s()
-    'Trigger Fired: ' + @trigger.to_s
+  def to_s(colour: false)
+    'Trigger Fired: ' + @trigger.to_s(colour: colour)
   end
+  
+  def to_summary(colour: false)
+    #puts '@trigger' + @trigger.inspect
+    if @trigger then
+      'Trigger Fired: ' + @trigger.to_summary(colour: colour)
+    else
+      'Trigger Fired: Trigger not found; guid: ' + @h[:si_guid_that_invoked].inspect
+    end
+  end  
 
 end
 
@@ -4761,6 +5531,11 @@ class LastRunTimeConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'LastRunTimeConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Media
@@ -4777,10 +5552,12 @@ class HeadphonesConnectionConstraint < Constraint
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     connection = @h[:connected] ? 'Connected' : 'Disconnected'
     'Headphones ' + connection
   end
+  
+  alias to_summary to_s
 
 end
 
@@ -4798,6 +5575,11 @@ class MusicActiveConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'MusicActiveConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Notification
@@ -4821,6 +5603,11 @@ class NotificationPresentConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'NotificationPresentConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Notification
@@ -4838,6 +5625,11 @@ class PriorityModeConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'PriorityModeConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Notification
@@ -4854,6 +5646,11 @@ class NotificationVolumeConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'NotificationVolumeConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Phone
@@ -4870,6 +5667,11 @@ class InCallConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'InCallConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Phone
@@ -4884,6 +5686,11 @@ class PhoneRingingConstraint < Constraint
 
     super(options.merge h)
 
+  end
+  
+  def to_s(colour: false)
+    @s = @h[:ringing] ? 'Phone Ringing' : 'Not Ringing'
+    super(colour: colour)
   end
 
 end
@@ -4906,6 +5713,11 @@ class BrightnessConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'BrightnessConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Screen and Speaker
@@ -4922,7 +5734,7 @@ class VolumeConstraint < Constraint
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     a = ['Volume On', 'Vibrate Only' 'Silent', 'Vibrate or Silent']
     
     "Ringer Volume\n  " + a[@h[:option]]
@@ -4944,6 +5756,11 @@ class SpeakerPhoneConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'SpeakerPhoneConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Screen and Speaker
@@ -4960,6 +5777,11 @@ class DarkThemeConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'DarkThemeConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Screen and Speaker
@@ -4977,9 +5799,11 @@ class ScreenOnOffConstraint < Constraint
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     'Screen ' + (@h[:screen_on] ? 'On' : 'Off')
   end
+  
+  alias to_summary to_s
 
 end
 
@@ -4999,6 +5823,11 @@ class VolumeLevelConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'VolumeLevelConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Sensors
@@ -5016,6 +5845,11 @@ class FaceUpDownConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'FaceUpDownConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Sensors
@@ -5034,7 +5868,7 @@ class LightLevelConstraint < Constraint
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     
     operator = @h[:light_level] == -1 ? 'Less than' : 'Greater than'    
     condition = operator + ' ' + @h[:light_level_float].to_s + 'lx'
@@ -5058,6 +5892,11 @@ class DeviceOrientationConstraint < Constraint
 
   end
 
+  def to_s(colour: false)
+    'DeviceOrientationConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
 end
 
 # Category: Sensors
@@ -5074,7 +5913,7 @@ class ProximitySensorConstraint < Constraint
 
   end
   
-  def to_s()
+  def to_s(colour: false)
     'Proximity Sensor: ' + (@h[:near] ? 'Near' : 'Far')
   end
 
