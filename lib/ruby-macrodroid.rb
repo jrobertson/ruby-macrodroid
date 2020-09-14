@@ -1511,7 +1511,8 @@ class IncomingCallTrigger < Trigger
   end
 
   def to_s(colour: false)
-    'IncomingCallTrigger ' + @h.inspect
+    caller = @h[:incoming_call_from_list].map {|x| "%s" % x[:name]}.join(', ')
+    "Call Incoming [%s]" % caller
   end
 
   alias to_summary to_s
@@ -1654,7 +1655,8 @@ class WifiConnectionTrigger < Trigger
   end
 
   def to_s(colour: false)
-    'WifiConnectionTrigger ' + @h.inspect
+    access_point = @h[:ssid_list].first
+    'Connected to network ' + access_point
   end
 
   alias to_summary to_s
@@ -2009,7 +2011,11 @@ class RegularIntervalTrigger < Trigger
   end
 
   def to_s(colour: false)
-    'RegularIntervalTrigger ' + @h.inspect
+    
+    interval = Subunit.new(units={minutes:60, hours:60}, \
+                           seconds: @h[:seconds]).strfunit("%c")
+    'Regular Interval ' + "\n  Interval: " + interval
+    
   end
 
   alias to_summary to_s
@@ -2317,7 +2323,8 @@ class NotificationTrigger < DeviceEventsTrigger
   end
 
   def to_s(colour: false)
-    'NotificationTrigger ' + @h.inspect
+    s = (@h[:package_name_list] + @h[:application_name_list]).uniq.join(', ')
+    'Notification Received ' + "\n    Any Content (%s)" % s
   end
 
   alias to_summary to_s
@@ -2649,7 +2656,7 @@ class FloatingButtonTrigger < Trigger
   end
 
   def to_s(colour: false)
-    'FloatingButtonTrigger ' + @h.inspect
+    'Floating Button'
   end
 
   alias to_summary to_s
@@ -4251,7 +4258,8 @@ class NotificationAction < NotificationsAction
   end
   
   def to_s(colour: false)
-    'Display Notification: ' + "%s: %s" % [@h[:notification_subject], @h[:notification_text]]
+    "Display Notification\n  " + \
+        "%s: %s" % [@h[:notification_subject], @h[:notification_text]]
   end
 
 end
@@ -4291,7 +4299,7 @@ class ToastAction < NotificationsAction
   end
   
   def to_s(colour: false)
-    "Popup Message '%s'" % @h[:message_text]
+    "Popup Message\n  %s" % @h[:message_text]
   end
 
 end
@@ -4504,7 +4512,13 @@ class ScreenOnAction < ScreenAction
   end
 
   def to_s(colour: false)
-    'ScreenOnAction ' + @h.inspect
+    
+    state = @h[:screen_off] ? 'Off' : 'On'
+    state += ' ' + 'No Lock (root only)' if @h[:screen_off_no_lock]
+    #state += ' ' + '(Alternative)' if @h[:screen_on_alternative]
+    
+    'Screen ' + state
+    
   end
 
   alias to_summary to_s
