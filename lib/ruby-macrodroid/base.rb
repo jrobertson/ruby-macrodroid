@@ -8,59 +8,6 @@
 #  
 
 
-module Params
-
-  refine Hash do
-
-    # turns keys from camelCase into snake_case
-
-    def to_snake_case(h=self)
-
-      h.inject({}) do |r, x|
-
-        key, value = x
-        #puts 'value: ' + value.inspect
-        
-        val = if value.is_a?(Hash) then
-          to_snake_case(value)
-        elsif value.is_a?(Array) and value.first.is_a? Hash
-          value.map {|row| to_snake_case(row)}
-        else
-          value          
-        end
-        
-        r.merge key.to_s.sub(/^m_/,'').gsub(/[A-Z][a-z]/){|x| '_' + 
-          x.downcase}.gsub(/[a-z][A-Z]/){|x| x[0] + '_' + x[1].downcase}\
-          .downcase.to_sym => val
-
-      end
-    end
-
-    # turns keys from snake_case to CamelCase
-    def to_camel_case(h=self)
-      
-      h.inject({}) do |r,x|
-                
-        key, value = x   
-        
-        val = if value.is_a?(Hash) then
-          to_camel_case(value)
-        elsif value.is_a?(Array) and value.first.is_a? Hash
-          value.map {|row| to_camel_case(row)}
-        else
-          value          
-        end
-        
-        r.merge({key.to_s.gsub(/(?<!^m)_[a-z]/){|x| x[-1].upcase} => val})
-      end
-      
-    end
-
-
-  end
-
-end
-
 class MacroObject
   using ColouredText
   
