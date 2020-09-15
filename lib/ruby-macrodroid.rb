@@ -411,12 +411,13 @@ class Macro
   using ColouredText
   using Params
 
-  attr_reader :local_variables, :triggers, :actions, :constraints, :guid
+  attr_reader :local_variables, :triggers, :actions, :constraints, 
+      :guid, :deviceid
   attr_accessor :title, :description
 
-  def initialize(name=nil, geofences: geofences, debug: false)
+  def initialize(name=nil, geofences: geofences, deviceid: nil, debug: false)
 
-    @title, @geofences, @debug = name, geofences, debug
+    @title, @geofences, @deviceid, @debug = name, geofences, deviceid, debug
     
     puts 'inside Macro#initialize' if @debug    
           
@@ -826,10 +827,14 @@ class MacroDroid
   using Params  
 
   attr_reader :macros, :geofences, :yaml
+  attr_accessor :deviceid
+  
+  # note: The deviceid can only be found from an existing Webhook trigger, 
+  #       generated from MacroDroid itself.
 
-  def initialize(obj=nil, debug: false)
+  def initialize(obj=nil, deviceid: nil, debug: false)
 
-    @debug = debug    
+    @deviceid, @debug = deviceid, debug    
     
     @geofences = {}
     
@@ -1034,7 +1039,8 @@ class MacroDroid
       puts ('macro: ' + macro.inspect).debug if @debug
 #       puts '@geofences: ' + @geofences.inspect if @debug
       
-      m = Macro.new(geofences: @geofences.map(&:last), debug: @debug )
+      m = Macro.new(geofences: @geofences.map(&:last), deviceid: @deviceid, 
+                    debug: @debug )
       m.import_h(macro)
       m
 
@@ -1055,7 +1061,8 @@ class MacroDroid
     
     @macros = doc.root.xpath('item').map do |node|
       puts ('geofences: ' + geofences.inspect).highlight if @debug
-      Macro.new(geofences: geofences.map(&:last), debug: @debug).import_xml(node)
+      Macro.new(geofences: geofences.map(&:last), deviceid: @deviceid, 
+                debug: @debug).import_xml(node)
       
     end
 
@@ -1078,7 +1085,8 @@ class MacroDroid
        
     @macros = doc.root.xpath('macro').map do |node|
           
-      Macro.new(geofences: @geofences.map(&:last), debug: @debug).import_xml(node)
+      Macro.new(geofences: @geofences.map(&:last), deviceid: @deviceid, 
+                debug: @debug).import_xml(node)
       
     end
   end
@@ -1256,26 +1264,7 @@ class Trigger < MacroObject
 end
 
 
-# Category: Applications
-#
-class WebHookTrigger < Trigger
 
-  def initialize(h={})
-
-    options = {
-      identifier: ''
-    }
-
-    super(options.merge h)
-
-  end
-
-  def to_s(colour: false)
-    'WebHookTrigger ' + @h.inspect
-  end
-
-  alias to_summary to_s
-end
 
 # Category: Applications
 #
@@ -1633,7 +1622,12 @@ class WebHookTrigger < Trigger
   end
 
   def to_s(colour: false)
-    'WebHookTrigger ' + @h.inspect
+    
+    url = "https://trigger.macrodroid.com/%s/%s" % \
+        [@h[:macro].deviceid, @h[:identifier]]
+    @s = 'WebHook (Url)' + "\n  " + url
+    super()
+
   end
 
   alias to_summary to_s
@@ -2537,7 +2531,7 @@ class ProximityTrigger < SensorsTrigger
       selected_option: 0
     }
 
-    super(options.merge filter(options,h))
+    super(options.merge h)
 
   end
   
@@ -2551,6 +2545,8 @@ class ProximityTrigger < SensorsTrigger
     
     "Proximity Sensor (%s)" % distance
   end
+  
+  alias to_summary to_s
 
 end
 
@@ -2906,6 +2902,29 @@ end
 
 # Category: Applications
 #
+class LaunchShortcutAction < ApplicationAction
+
+  def initialize(h={})
+    
+    options = {
+      :app_name=>"Amazon Alexa", :intent_encoded=>"", :name=>"Ask Alexa"
+    }
+
+    super(options.merge h)
+
+  end
+  
+  def to_s(colour: false)
+    @s = "Launch Shortcut: " + @h[:app_name] + "\n  " + @h[:name]
+    super()
+  end
+  
+  alias to_summary to_s
+
+end
+
+# Category: Applications
+#
 class OpenWebPageAction < ApplicationAction
 
   def initialize(h={})
@@ -3218,7 +3237,7 @@ class SendIntentAction < ConnectivityAction
   end
 
   def to_s(colour: false)
-    'SendIntentAction ' + @h.inspect
+    'Send Intent ' + "\n  " + @h[:action]
   end
 
   alias to_summary to_s
@@ -4582,7 +4601,7 @@ class KeepAwakeAction < ScreenAction
         Subunit.new(units={minutes:60, hours:60}, seconds: scnds).strfunit("%x")
       end
       
-      'Keep Device Awake ' + screen + ' ' + whenx
+      "Keep Device Awake\n  " + screen + ' - ' + whenx
       
     else
       'Disable Keep Awake'
@@ -4904,10 +4923,13 @@ class BluetoothConstraint < Constraint
   
   def to_s(colour: false)
     device = @h[:device_name] #== 'Any Device' ? 'Any' : @h[:device_name]
-    "Device Connected (%s)" % device
+    "Device Connected\n  %s" % device
   end
   
-  alias to_summary to_s
+  def to_summary(colour: false)
+    device = @h[:device_name] #== 'Any Device' ? 'Any' : @h[:device_name]
+    "Device Connected (%s)" % device
+  end
 
 end
 
