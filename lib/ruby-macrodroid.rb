@@ -248,11 +248,7 @@ class ActionsNlp
 
   alias find_action run_route
 
-  def to_s(colour: false)
-    'ActionsNlp ' + @h.inspect
-  end
 
-  alias to_summary to_s
 end
 
 class ConstraintsNlp
@@ -333,6 +329,7 @@ module Params
 end
 
 
+
 class Macro
   using ColouredText
   using Params
@@ -406,7 +403,25 @@ class Macro
     @description = h[:description]
     
     # fetch the local variables
-    @local_variables = h['local_variables']
+    if h[:local_variables].any? and h[:local_variables].first.any? then
+      
+      @local_variables = h[:local_variables].map do |var|
+              
+        val = case var[:type]
+        when 0 # boolean
+          var[:boolean_value]
+        when 1 # integer
+          var[:int_value]
+        when 2 # string
+          var[:string_value]
+        when 3 # decimal
+          var[:decimal_Value]
+        end
+        
+        [var[:name], val]
+        
+      end.to_h
+    end
     
     # fetch the triggers
     @triggers = h[:trigger_list].map do |trigger|
@@ -634,7 +649,7 @@ EOF
         
       end
       
-      if s =~ /^If/i then
+      if s =~ /^(?:If|WHILE \/ DO)/i then
         
         if indent < 1 then
           
@@ -657,11 +672,29 @@ EOF
     end.join("\n")
     
     a = [
-      (colour ? "m".bg_cyan.gray.bold : 'm') + ': ' + @title,
-      @triggers.map {|x| (colour ? "t".bg_red.gray.bold : 't') \
-                     + ": %s" % x}.join("\n"),
-      actions
+      (colour ? "m".bg_cyan.gray.bold : 'm') + ': ' + @title
     ]
+    
+    if @description and @description.length >= 1 then
+      a << (colour ? "d".bg_gray.gray.bold : 'd') + ': ' \
+               + @description.gsub(/\n/,"\n  ")
+    end    
+    
+    if @local_variables.length >= 1 then
+      
+      vars = @local_variables.map do |k,v|
+        label = colour ? 'v'.bg_magenta : 'v'
+        label += ': '
+        label + "%s: %s" % [k,v]
+      end
+      
+      a << vars.join("\n")
+    end
+    
+    a << @triggers.map {|x| (colour ? "t".bg_red.gray.bold : 't') \
+                     + ": %s" % x}.join("\n")
+    a << actions
+
     
     if @constraints.any? then
       a << @constraints.map do |x|
@@ -669,10 +702,9 @@ EOF
       end.join("\n") 
     end
     
-    if @description and @description.length >= 1 then
-      a.insert(1, (colour ? "d".bg_gray.gray.bold : 'd') + ': ' \
-               + @description.gsub(/\n/,"\n  "))
-    end
+
+    
+
     
     a.join("\n") + "\n"
     
@@ -743,8 +775,6 @@ EOF
   end
 
 end
-
-
 
 
 class MacroDroidError < Exception

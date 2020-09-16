@@ -255,6 +255,7 @@ end
 #
 class WifiConstraint < Constraint
 
+  
   def initialize(h={})
 
     options = {
@@ -267,7 +268,16 @@ class WifiConstraint < Constraint
   end
 
   def to_s(colour: false)
-    'WifiConstraint ' + @h.inspect
+    
+    state = ['Enabled','Disabled','Connected', 'Not Connected'][@h[:wifi_state]]
+    @s =  'Wifi ' + state + ': '
+    
+    if @h[:ssid_list].length > 1 then
+      @s += "[%s]" % @h[:ssid_list].join(', ')
+    elsif @h[:ssid_list].length > 0
+      @s += @h[:ssid_list].first
+    end
+      
   end
 
   alias to_summary to_s
@@ -718,6 +728,55 @@ class VpnConstraint < Constraint
 
   def to_s(colour: false)
     'VpnConstraint ' + @h.inspect
+  end
+
+  alias to_summary to_s
+end
+
+
+# Category: MacroDroid Specific
+#
+class MacroDroidVariableConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      
+      :enable_regex=>false, 
+      :boolean_value=>false, 
+      :double_value=>0.0, 
+      :int_compare_variable=>false, 
+      :int_greater_than=>false, 
+      :int_less_than=>false, 
+      :int_not_equal=>false, 
+      :int_value=>1, 
+      :string_comparison_type=>0,
+      :string_equal=>true, 
+      :variable=>{
+                  :exclude_from_log=>false, 
+                  :is_local=>true, 
+                  :boolean_value=>false, 
+                  :decimal_value=>0.0, 
+                  :int_value=>2, 
+                  :name=>"torch", 
+                  :string_value=>"", 
+                  :type=>1
+                 }      
+
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s(colour: false)
+    
+      a = [:int_greater_than, :int_less_than, :int_not_equal, 
+                :string_equal].zip(['>','<','!=', '='])
+      operator = a.find {|label,_| @h[label]}.last
+    
+    @s = "%s %s %s" % [@h[:variable][:name], operator, @h[:int_value]]
+    super()
   end
 
   alias to_summary to_s

@@ -272,6 +272,60 @@ class TakePictureAction < CameraAction
 
 end
 
+
+# Conditions/Loops
+#
+class LoopAction < Action
+  
+  def initialize(h={})
+    
+    options = {
+
+    }
+    
+    h2 = options.merge(h)
+
+    super(h2)
+    
+    @label = 'WHILE / DO '
+
+  end
+
+  def to_s(colour: false)
+    
+    @s = 'WHILE / DO '
+    super()
+    
+  end
+end
+
+# Conditions/Loops
+#
+class EndLoopAction < Action
+  
+  def initialize(h={})
+    
+    options = {
+
+    }
+    
+    h2 = options.merge(h)
+
+    super(h2)
+    
+    @label = 'End Loop '
+
+  end
+
+  def to_s(colour: false)
+    
+    'End Loop '
+    
+  end
+end
+
+# Conditions/Loops
+#
 class IfConditionAction < Action
   
   def initialize(h={})
@@ -317,7 +371,7 @@ class ElseAction < Action
   
 end
 
-class ElseIfConditionAction < IfConditionAction
+class ElseIfConditionAction < Action
   
   def initialize(h={})
 
@@ -326,9 +380,14 @@ class ElseIfConditionAction < IfConditionAction
     }
 
     super(options.merge h)
-    @label = 'ElseIf '
+    @label = 'Else If '
 
   end  
+  
+  def to_s(colour: false)
+    @s = 'Else If '
+    super()
+  end
     
 
 end
@@ -793,6 +852,11 @@ end
 #
 class CameraFlashLightAction < DeviceSettingsAction
 
+  # options
+  #  0  Toch On
+  #  1  Torch Off
+  #  2  Torch Toggle
+  #
   def initialize(h={})
 
     options = {

@@ -1,4 +1,4 @@
-# file: ruby-macrodroid/constraints.rb
+# file: ruby-macrodroid/triggers.rb
 
 # This file contains the following classes:
 #
@@ -24,6 +24,8 @@
 #  FloatingButtonTrigger ShortcutTrigger VolumeButtonTrigger
 #  MediaButtonPressedTrigger SwipeTrigger
 #  
+
+
 
 
 class Trigger < MacroObject
@@ -968,6 +970,28 @@ class MusicPlayingTrigger < DeviceEventsTrigger
   end
 
   alias to_summary to_s
+end
+
+
+# Category: Device Events
+#
+class NFCTrigger < DeviceEventsTrigger
+
+  def initialize(h={})
+
+    options = {
+    }
+
+    super(options.merge h)
+
+  end
+  
+  def to_s(colour: false)
+    'NFC Tag' + "\n  " + @h[:tag_name]
+  end
+  
+  alias to_summary to_s
+
 end
 
 
