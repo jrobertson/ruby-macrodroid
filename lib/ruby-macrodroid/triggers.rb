@@ -1278,6 +1278,28 @@ class SunriseSunsetTrigger < Trigger
 end
 
 
+# Category: MacroDroid Specific
+#
+class EmptyTrigger < Trigger
+
+  def initialize(h={})
+
+    options = {
+
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s(colour: false)
+    'EmptyTrigger'
+  end
+
+  alias to_summary to_s
+end
+
+
 class SensorsTrigger < Trigger
   
   def initialize(h={})

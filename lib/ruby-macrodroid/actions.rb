@@ -275,6 +275,34 @@ end
 
 # Conditions/Loops
 #
+class IfConfirmedThenAction < Action
+  
+  def initialize(h={})
+    
+    options = {
+      a: true,
+      constraint_list: ''
+    }
+    
+    macro = h[:macro]
+    h2 = options.merge(filter(options,h).merge(macro: macro))
+
+    super(h2)
+    
+    @label = 'If Confirmed Then '
+
+  end
+
+  def to_s(colour: false)
+    
+    @s = "If Confirmed Then " #+ @constraints.map(&:to_s).join(" %s " % operator)
+    super(colour: colour)
+    
+  end
+end
+
+# Conditions/Loops
+#
 class LoopAction < Action
   
   def initialize(h={})
@@ -702,7 +730,7 @@ class ClipboardAction < DeviceAction
   end
 
   def to_s(colour: false)
-    'ClipboardAction ' + @h.inspect
+    'Fill Clipboard' + "\n  " + @h[:clipboard_text] #+ @h.inspect
   end
 
   alias to_summary to_s
@@ -1090,6 +1118,30 @@ class OpenFileAction < FileAction
 end
 
 
+# Category: Files
+#
+class WriteToFileAction < FileAction
+
+  def initialize(h={})
+
+    options = {
+      app_name: '',
+      class_name: '',
+      package_name: '',
+      file_path: ''
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s(colour: false)
+    'Write To File' + "\n  " + @h[:filename] #+ @h.inspect
+  end
+
+  alias to_summary to_s
+end
+
 class LocationAction < Action
   
   def initialize(h={})
@@ -1268,6 +1320,101 @@ class ExportMacrosAction < Action
   def to_s(colour: false)
     
     'Export macros'
+    
+  end
+  
+  alias to_summary to_s
+  
+end
+
+
+# MacroDroid Specific
+#
+class SetVariableAction < Action
+  
+  def initialize(h={})
+    
+    options = {
+      :user_prompt=>true, 
+      :user_prompt_message=>"Please enter a word to see it reversed", 
+      :user_prompt_show_cancel=>true, 
+      :user_prompt_stop_after_cancel=>true, 
+      :user_prompt_title=>"Word reverse",
+      :name => 'word'
+    }
+    super(h)
+    
+  end  
+  
+  def to_s(colour: false)
+    
+    input = if @h[:user_prompt] then
+      '[User Prompt]'
+    elsif @h[:expression]
+      @h[:expression]
+    elsif @h[:int_value_increment]
+      '(+1)'      
+    elsif @h[:int_value_decrement]
+      '(-1)'
+    elsif @h[:int_random]
+      "Random %d -> %d" % [@h[:int_random_min], @h[:int_random_max]]
+    else
+
+=begin      
+        sym = case @h[:variable][:type]
+        when 0 # boolean
+          :new_boolean_value
+        when 1 # integer
+          :new_int_value
+        when 2 # string
+          :new_string_value
+        when 3 # decimal
+          :new_double_value
+        end
+        
+        @h[sym].to_s
+=end        
+        a = %i(new_boolean_value new_int_value new_string_value new_double_value)
+        @h[a[@h[:variable][:type]]].to_s
+
+    end
+    
+    @s = 'Set Variable' + ("\n  %s: " % @h[:variable][:name]) + input #+ @h.inspect
+    super()
+    
+  end
+  
+  alias to_summary to_s
+  
+end
+
+
+
+# MacroDroid Specific
+#
+class TextManipulationAction < Action
+  
+  def initialize(h={})
+    
+    options = {
+
+    }
+    super(h)
+    
+  end  
+  
+  def to_s(colour: false)
+    
+    tm = @h[:text_manipulation]
+    
+    s = case tm[:type].to_sym
+    when :SubstringManipulation
+      "Substring(%s, %s)" % [@h[:text], tm[:params].join(', ')]
+    end
+
+    
+    'Text Manipulation' + "\n  " + s #+ ' ' + @h.inspect
+    
     
   end
   
@@ -1636,7 +1783,13 @@ end
 #
 class ToastAction < NotificationsAction
 
-  def initialize(h={})
+  def initialize(obj)
+    
+    h = if obj.is_a? Hash then
+      obj
+    else
+      {msg: obj}
+    end
 
     if h[:msg] then
       h[:message_text] = h[:msg]
@@ -1667,7 +1820,7 @@ class ToastAction < NotificationsAction
   end
   
   def to_s(colour: false)
-    "Popup Message\n  %s" % @h[:message_text]
+    @s = "Popup Message\n  %s" % @h[:message_text]
   end
 
 end

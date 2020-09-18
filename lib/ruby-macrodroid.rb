@@ -154,6 +154,16 @@ class ActionsNlp
       [ToastAction, {msg: msg}]
     end
     
+    # e.g. Popup Message\n  hello world!
+    get /^Popup Message\n\s+(.*)/im do |msg|
+      [ToastAction, {msg: msg}]
+    end    
+            
+    # e.g. Popup Message
+    get /^Popup Message$/i do
+      [ToastAction, {}]
+    end    
+    
     # e.g. say current time
     get /^say current[ _]time/i do
       [SayTimeAction, {}]
@@ -528,20 +538,33 @@ class Macro
       @actions = node.xpath('action').map do |e|
         
         puts 'action e: ' + e.xml.inspect if @debug
-        r = ap.find_action e.text
+        puts 'e.text ' + e.text if @debug
+        r = ap.find_action e.text.strip
         puts 'found action ' + r.inspect if @debug
         
         if r then
           
-          a = e.xpath('item/*')
+          loose = e.element('item/description/text()')
           
-          h = if a.any? then
-            a.map {|node| [node.name.to_sym, node.text.to_s]}.to_h
+          raw_attributes = if loose then
+          
+            puts 'do something ' + loose.to_s
+            loose.to_s
+            
           else
-            {}
+            
+            a = e.xpath('item/*')
+            
+            h = if a.any? then
+              a.map {|node| [node.name.to_sym, node.text.to_s]}.to_h
+            else
+              {}
+            end
+            
+            r[1].merge(h)
+            
           end
-          
-          r[0].new(r[1].merge(h))
+          r[0].new(raw_attributes)
         end
         
       end      
