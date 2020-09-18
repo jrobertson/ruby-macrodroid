@@ -1,3 +1,29 @@
+# Ruby-MacroDroid: Reading a MacroDroid JSON file
+
+
+## Usage
+
+    require 'macrodroid'
+
+    file = 'm1809.mdr'
+          
+    s = 'ftp://user:password@phone.home:2221/Download/' + file
+
+    droid = MacroDroid.new s
+    puts droid.to_s(colour: true)
+
+In the above example a MaroDroid JSON file is downloaded from the phone and read using the Ruby-MacroDroid gem. 
+
+Notes: 
+
+* An FTP server was installed and running on the phone for this to work. Alternatively you could transfer the file from the phone to your computer manually
+
+macrodroid import read open load
+
+
+
+-----------------
+
 # Ruby-MacroDroid: Creating a Geofence trigger
 
     require 'ruby-macrodroid'
