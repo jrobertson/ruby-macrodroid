@@ -134,7 +134,9 @@ class ApplicationLaunchedTrigger < Trigger
   end
 
   def to_s(colour: false)
-    'ApplicationLaunchedTrigger ' + @h.inspect
+    a = @h[:application_name_list]
+    apps = a.length > 1 ? "[%s]" % a.join(', ')  : a.first
+    'Application Launched' + "\n  " + apps
   end
 
   alias to_summary to_s

@@ -356,7 +356,14 @@ end
 #
 class IfConditionAction < Action
   
-  def initialize(h={})
+  def initialize(obj=nil)
+    
+    h = if obj.is_a? Hash then
+      obj
+    else
+      # get the constraints
+
+    end
     
     options = {
       a: true,
@@ -1093,6 +1100,40 @@ class FileAction < Action
   
 end
 
+
+
+# Category: Files
+#
+class FileOperationV21Action < FileAction
+
+  def initialize(h={})
+
+    options = {
+      :app_name=>"", :class_name=>"", :package_name=>"", :file_path=>"", 
+      :file_extensions=>["jpg", "jpeg", "png", "raw", "bmp", "tif", "tiff", 
+                         "gif"], :file_option=>2, :from_name=>"Sent", 
+      :from_uri_string=>"", :option=>2
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s(colour: false)
+    
+    operation = ['Copy', 'Move', 'Delete', 'Create Folder']
+    file = ['All Files', 'All Media Files', 'Images', 'Audio', 'Videos', 'Specify File Pattern', 'Folder']
+    
+    detail = @h[:from_name]
+    detail += ' to: ' + @h[:to_name] if @h[:option] == 1
+    @s = "%s %s" % [operation[@h[:option]], file[@h[:file_option]]]  \
+        + "\n  " + detail #+ @h.inspect        
+    super()
+  end
+
+  alias to_summary to_s
+end
+
 # Category: Files
 #
 class OpenFileAction < FileAction
@@ -1302,6 +1343,32 @@ class ClearLogAction < LoggingAction
   end
 
   alias to_summary to_s
+end
+
+# MacroDroid Specific
+#
+class ConfirmNextAction < Action
+  
+  def initialize(h={})
+    
+    options = {
+      :message=>"Do you want to fill the clipboard? ", :title=>"Fill clipboard? ", :negative_text=>"NO", :positive_text=>"YES", :class_type=>"ConfirmNextAction"
+
+    }
+
+    super(h)
+    
+  end  
+  
+  def to_s(colour: false)
+    
+    @s = 'Confirm Next'  + "\n  %s: %s" % [@h[:title], @h[:message]]
+    super()
+    
+  end
+  
+  alias to_summary to_s
+  
 end
 
 # MacroDroid Specific

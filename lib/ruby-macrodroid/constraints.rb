@@ -882,7 +882,16 @@ class LastRunTimeConstraint < Constraint
   end
 
   def to_s(colour: false)
-    'LastRunTimeConstraint ' + @h.inspect
+    
+    macro = if @h[:check_this_macro] then
+      '[This Macro]'
+    end
+    
+    invoked = @h[:invoked] ? ' Invoked' : 'Not Invoked'
+    
+    duration = Subunit.seconds(@h[:time_period_seconds]).strfunit("%x")
+    "Macro(s) %s\n  %s: %s for %s" % [invoked, macro, invoked, duration]
+    
   end
 
   alias to_summary to_s

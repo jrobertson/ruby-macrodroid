@@ -253,6 +253,11 @@ class ActionsNlp
       [KeepAwakeAction, {enabled: false, screen_option: 0}]
     end    
 
+    #a: Disable Keep Awake
+    #
+    get /if (.*)/i do
+      [IfConditionAction, {}]
+    end      
 
   end
 
@@ -539,16 +544,25 @@ class Macro
         
         puts 'action e: ' + e.xml.inspect if @debug
         puts 'e.text ' + e.text if @debug
-        r = ap.find_action e.text.strip
+        
+        inner_lines = e.xpath('item/description/text()')        
+        
+        action = if e.text.to_s.strip.empty? then
+          inner_lines.shift
+        else
+          e.text.strip
+        end
+        
+        r = ap.find_action action
         puts 'found action ' + r.inspect if @debug
         
         if r then
           
-          loose = e.element('item/description/text()')
+          loose = inner_lines.shift
           
           raw_attributes = if loose then
           
-            puts 'do something ' + loose.to_s
+            puts 'do something ' + loose.to_s if @debug
             loose.to_s
             
           else
