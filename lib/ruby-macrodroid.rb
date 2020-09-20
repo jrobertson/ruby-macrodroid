@@ -391,6 +391,7 @@ class Macro
       local_variables: @local_variables,
       m_trigger_list: @triggers.map(&:to_h),
       m_action_list: @actions.map(&:to_h),
+      m_category: @category,
       m_constraint_list: @constraints.map(&:to_h),
       m_description: '',
       m_name: title(),
@@ -414,6 +415,7 @@ class Macro
       puts 'h:' + h.inspect
     end
     
+    @category = h[:category]
     @title = h[:name]
     @description = h[:description]
     
@@ -449,17 +451,17 @@ class Macro
     @actions = h[:action_list].map do |action|
       object(action.to_snake_case)
     end
-
+    puts 'before fetch constraints' if @debug
     # fetch the constraints                               
     @constraints = h[:constraint_list].map do |constraint|
       object(constraint.to_snake_case)
     end                               
-    
+    puts 'after fetch constraints' if @debug    
     @h = h
 
     %i(local_variables m_trigger_list m_action_list m_constraint_list)\
       .each {|x| @h[x] = [] }
-
+    puts 'after @h set' if @debug    
     @h
 
   end
@@ -476,6 +478,7 @@ class Macro
       # level 2
       
       @title = node.attributes[:name]
+      @category = node.attributes[:category]
       @description = node.attributes[:description]
       
       
@@ -707,10 +710,11 @@ EOF
       r
       
     end.join("\n")
-    
-    a = [
-      (colour ? "m".bg_cyan.gray.bold : 'm') + ': ' + @title
-    ]
+
+    a = []
+    a << '# ' + @category + "\n" if @category
+    a <<  (colour ? "m".bg_cyan.gray.bold : 'm') + ': ' + @title
+
     
     if @description and @description.length >= 1 then
       a << (colour ? "d".bg_gray.gray.bold : 'd') + ': ' \
@@ -804,7 +808,7 @@ EOF
       h2 = h.merge( macro: self)
       puts 'h2: ' + h2.inspect      
       r = klass.new h2 
-
+      puts 'r:' + r.inspect
       r
       
     end
@@ -842,6 +846,7 @@ class MacroDroid
       if s[0] == '{' then
         
         import_json(s) 
+        puts 'after import_json' if @debug
         
       elsif  s[0] == '<'
         
@@ -934,7 +939,7 @@ class MacroDroid
   end
 
   alias to_json export_json
-
+  
 
   def to_h()
 

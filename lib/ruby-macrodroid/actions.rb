@@ -69,43 +69,6 @@ class Action < MacroObject
 end
 
 
-class LocationAction < Action
-  
-  def initialize(h={})
-    super(h)
-    @group = 'location'
-  end
-  
-end
-
-# Category: Location
-#
-class ShareLocationAction < LocationAction
-
-  def initialize(h={})
-    
-    super()
-
-    options = {
-      email: '',
-      variable: {:m_stringValue=>"", :m_name=>"", 
-                 :m_decimalValue=>0.0, :isLocal=>true, :m_booleanValue=>false, 
-                 :excludeFromLog=>false, :m_intValue=>0, :m_type=>2},
-      sim_id: 0,
-      output_channel: 5,
-      old_variable_format: true
-    }
-
-    super(options.merge h)
-
-  end
-
-  def to_s(colour: false)
-    'ShareLocationAction ' + @h.inspect
-  end
-
-  alias to_summary to_s
-end
 
 
 class ApplicationAction < Action
@@ -1214,13 +1177,28 @@ end
 
 # Category: Location
 #
+class LocationAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'location'
+  end
+  
+end
+
+# Category: Location
+#
 class ShareLocationAction < LocationAction
 
   def initialize(h={})
+    
+    super()
 
     options = {
       email: '',
-      variable: {:m_stringValue=>"", :m_name=>"", :m_decimalValue=>0.0, :isLocal=>true, :m_booleanValue=>false, :excludeFromLog=>false, :m_intValue=>0, :m_type=>2},
+      variable: {:m_stringValue=>"", :m_name=>"", 
+                 :m_decimalValue=>0.0, :isLocal=>true, :m_booleanValue=>false, 
+                 :excludeFromLog=>false, :m_intValue=>0, :m_type=>2},
       sim_id: 0,
       output_channel: 5,
       old_variable_format: true
@@ -1231,11 +1209,13 @@ class ShareLocationAction < LocationAction
   end
 
   def to_s(colour: false)
-    'ShareLocationAction ' + @h.inspect
+    @s = 'Share Location' + "\n  GPS" # + @h.inspect
+    super()
   end
 
   alias to_summary to_s
 end
+
 
 # Category: Location
 #
@@ -1472,22 +1452,35 @@ class TextManipulationAction < Action
   
   def to_s(colour: false)
     
-    tm = @h[:text_manipulation]
-    
-    s = case tm[:type].to_sym
-    when :SubstringManipulation
+    #tm = @h[:text_manipulation][:type]
+
+    #s = case tm[:type].to_sym
+    s = case 3 # @h[:text_manipulation][:option].to_i
+    when 0 # :SubstringManipulation
       "Substring(%s, %s)" % [@h[:text], tm[:params].join(', ')]
+    when 1 # :ReplaceAllManipulation
+      "Replace all(%s, %s, %s)" % [@h[:text], *tm[:params]]      
+    when 2 # :ExtractTextManipulation
+      "Extract text(%s, %s)" % [@h[:text], tm[:params].join(', ')]      
+    when 3 # :UpperCaseManipulation
+      "Upper case(%s)" % [@h[:text]]
+      #'foo'
+    when 4 # :LowerCaseManipulation
+      "Lower case(%s)" % [@h[:text]]      
+    when 5 # :TrimWhitespaceManipulation
+      "Trim whitespace(%s)" % [@h[:text]]      
     end
 
-    
-    'Text Manipulation' + "\n  " + s #+ ' ' + @h.inspect
-    
+    'Text Manipulation' + "\n  " + s.inspect #+ ' ' + @h.inspect        
     
   end
   
   alias to_summary to_s
   
 end
+
+
+
 
 class PauseAction < Action
   
@@ -1603,7 +1596,9 @@ class SendEmailAction < MessagingAction
   end
 
   def to_s(colour: false)
-    'SendEmailAction ' + @h.inspect
+    recipient = @h[:email_address]
+    @s = 'Send EmailAction' + "\n  To: " + recipient #+ ' ' + @h.inspect
+    super()
   end
 
   alias to_summary to_s

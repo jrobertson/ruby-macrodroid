@@ -1604,3 +1604,34 @@ class SwipeTrigger < Trigger
 
   alias to_summary to_s
 end
+
+
+
+
+# Category: User Input
+#
+class WidgetPressedTrigger < Trigger
+
+  def initialize(h={})
+
+    options = {
+      :swipe_start_area=>0, :swipe_motion=>0, :cleared=>true, 
+      :image_id=>2130968576, :image_package_name=>"com.android.providers.settings",
+      :image_resource_name=>"com.android.providers.settings", :widget_label=>"", 
+      :widget_type=>4
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s(colour: false)
+    # 4 == cutom , 0 = green, 1 = blue, 2 = red, 3 = yellow
+    style = %w(Green Blue Red Yellow Custom)[@h[:widget_type]]
+    @s = "Widget Button (%s)" % [style] #+ @h.inspect
+    super()
+  end
+
+  alias to_summary to_s
+end
+
