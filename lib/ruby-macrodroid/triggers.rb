@@ -50,6 +50,19 @@ class Trigger < MacroObject
     detail.select {|k,v| @h.include? k }.all? {|key,value| @h[key] == value}
 
   end
+  
+  def to_s(colour: false)
+
+    h = @h.clone    
+    h.delete :macro
+    @s ||= "#<%s %s>" % [self.class, h.inspect]
+    operator = @h[:is_or_condition] ? 'OR' : 'AND'
+    constraints = @constraints.map \
+        {|x| x.to_summary(colour: colour, indent: 1)}.join(" %s " % operator)
+    
+    @constraints.any? ? @s + "\n  " + constraints : @s
+    
+  end  
 
 end
 
@@ -968,10 +981,17 @@ class MusicPlayingTrigger < DeviceEventsTrigger
   end
 
   def to_s(colour: false)
-    'MusicPlayingTrigger ' + @h.inspect
+    
+    event = @h[:option] == 0 ? 'Started' : 'Stopped'
+    @s = 'Music/Sound Playing' + "\n  %s" % event #+ @h.inspect
+    super()
+    
   end
 
-  alias to_summary to_s
+  def to_summary(colour: false)
+    event = @h[:option] == 0 ? 'Started' : 'Stopped'
+    @s = 'Music/Sound Playing' + " (%s)" % event #+ @h.inspect    
+  end
 end
 
 
@@ -1379,7 +1399,8 @@ class ProximityTrigger < SensorsTrigger
       'Far'
     end
     
-    "Proximity Sensor (%s)" % distance
+    @s = "Proximity Sensor (%s)" % distance
+    super()
   end
   
   alias to_summary to_s

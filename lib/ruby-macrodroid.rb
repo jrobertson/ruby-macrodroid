@@ -689,7 +689,7 @@ EOF
         
       end
       
-      if s =~ /^(?:If|WHILE \/ DO)/i then
+      if s =~ /^(?:If|DO \/ WHILE)/i then
         
         if indent < 1 then
           

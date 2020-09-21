@@ -58,6 +58,37 @@ class Constraint < MacroObject
 end
 
 
+# Category: application
+#
+class ActiveApplicationConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      :application_name_list=>["YouTube"], 
+      :foreground=>true, 
+      :package_name_list=>["com.google.android.youtube"]      
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s(colour: false, indent: 0)
+    
+    indentx = '  ' * indent
+    mode = @h[:foreground] ? 'foreground' : 'not foreground'
+    apps = @h[:application_name_list]
+    indentx + 'App ' + mode + "\n  " + indentx + apps.join(', ') #+ @h.inspect
+  end
+
+  def to_summary(colour: false, indent: 0)
+    
+    mode = @h[:foreground] ? 'foreground' : 'not foreground'
+    apps = @h[:application_name_list]
+    'App ' + mode + " (%s)" % apps.join(', ') #+ @h.inspect
+  end
+end
 
 # Category: Battery/Power
 #
@@ -75,7 +106,7 @@ class BatteryLevelConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     operator = if @h[:greater_than] then
       '>'
@@ -108,7 +139,7 @@ class BatterySaverStateConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'BatterySaverStateConstraint ' + @h.inspect
   end
 
@@ -131,7 +162,7 @@ class BatteryTemperatureConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'BatteryTemperatureConstraint ' + @h.inspect
   end
 
@@ -153,7 +184,7 @@ class ExternalPowerConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     connection = @h[:external_power] ? 'Connected' : 'Disconnected'
     'Power ' + connection
   end
@@ -176,7 +207,7 @@ class BluetoothConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     device = @h[:device_name] #== 'Any Device' ? 'Any' : @h[:device_name]
     "Device Connected\n  %s" % device
   end
@@ -202,7 +233,7 @@ class GPSEnabledConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'GPSEnabledConstraint ' + @h.inspect
   end
 
@@ -223,7 +254,7 @@ class LocationModeConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'LocationModeConstraint ' + @h.inspect
   end
 
@@ -244,7 +275,7 @@ class SignalOnOffConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SignalOnOffConstraint ' + @h.inspect
   end
 
@@ -267,7 +298,7 @@ class WifiConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     state = ['Enabled','Disabled','Connected', 'Not Connected'][@h[:wifi_state]]
     @s =  'Wifi ' + state + ': '
@@ -299,7 +330,7 @@ class CellTowerConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'CellTowerConstraint ' + @h.inspect
   end
 
@@ -320,7 +351,7 @@ class IsRoamingConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'IsRoamingConstraint ' + @h.inspect
   end
 
@@ -341,7 +372,7 @@ class DataOnOffConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'DataOnOffConstraint ' + @h.inspect
   end
 
@@ -365,7 +396,7 @@ class WifiHotSpotConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'WifiHotSpotConstraint ' + @h.inspect
   end
 
@@ -393,7 +424,7 @@ class CalendarConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'CalendarConstraint ' + @h.inspect
   end
 
@@ -414,7 +445,7 @@ class DayOfWeekConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'DayOfWeekConstraint ' + @h.inspect
   end
 
@@ -438,7 +469,7 @@ class TimeOfDayConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     a = @h[:start_hour], @h[:start_minute], @h[:end_hour], @h[:start_minute]
     'Time of Day ' + "%02d:%02d - %02d:%02d" % a    
   end
@@ -461,7 +492,7 @@ class DayOfMonthConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'DayOfMonthConstraint ' + @h.inspect
   end
 
@@ -482,7 +513,7 @@ class MonthOfYearConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'MonthOfYearConstraint ' + @h.inspect
   end
 
@@ -503,7 +534,7 @@ class SunsetSunriseConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SunsetSunriseConstraint ' + @h.inspect
   end
 
@@ -552,7 +583,7 @@ class AirplaneModeConstraint < Constraint
     'airplane_mode.' + status
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     status = @h[:enabled] ? 'Enabled' : 'Disabled'
     'Airplane Mode ' + status
@@ -577,7 +608,7 @@ class AutoRotateConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'AutoRotateConstraint ' + @h.inspect
   end
 
@@ -598,7 +629,7 @@ class DeviceLockedConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Device ' + (@h[:locked] ? 'Locked' : 'Unlocked')
   end
   
@@ -620,7 +651,7 @@ class RoamingOnOffConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'RoamingOnOffConstraint ' + @h.inspect
   end
 
@@ -642,7 +673,7 @@ class TimeSinceBootConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'TimeSinceBootConstraint ' + @h.inspect
   end
 
@@ -663,7 +694,7 @@ class AutoSyncConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'AutoSyncConstraint ' + @h.inspect
   end
 
@@ -684,7 +715,7 @@ class NFCStateConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'NFCStateConstraint ' + @h.inspect
   end
 
@@ -705,7 +736,7 @@ class IsRootedConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'IsRootedConstraint ' + @h.inspect
   end
 
@@ -726,7 +757,7 @@ class VpnConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'VpnConstraint ' + @h.inspect
   end
 
@@ -769,7 +800,7 @@ class MacroDroidVariableConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
       a = [:int_greater_than, :int_less_than, :int_not_equal, 
                 :string_equal].zip(['>','<','!=', '='])
@@ -798,7 +829,7 @@ class MacroEnabledConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'MacroEnabledConstraint ' + @h.inspect
   end
 
@@ -820,7 +851,7 @@ class ModeConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'ModeConstraint ' + @h.inspect
   end
 
@@ -848,7 +879,7 @@ class TriggerThatInvokedConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Trigger Fired: ' + @trigger.to_s(colour: colour)
   end
   
@@ -881,7 +912,7 @@ class LastRunTimeConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     macro = if @h[:check_this_macro] then
       '[This Macro]'
@@ -911,7 +942,7 @@ class HeadphonesConnectionConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     connection = @h[:connected] ? 'Connected' : 'Disconnected'
     'Headphones ' + connection
   end
@@ -934,8 +965,9 @@ class MusicActiveConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
-    'MusicActiveConstraint ' + @h.inspect
+  def to_s(colour: false, indent: 0)
+    active = @h[:music_active] ? 'Playing' : 'Stopped'
+    'Music ' + active #+ @h.inspect
   end
 
   alias to_summary to_s
@@ -962,7 +994,7 @@ class NotificationPresentConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'NotificationPresentConstraint ' + @h.inspect
   end
 
@@ -984,7 +1016,7 @@ class PriorityModeConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'PriorityModeConstraint ' + @h.inspect
   end
 
@@ -1005,7 +1037,7 @@ class NotificationVolumeConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'NotificationVolumeConstraint ' + @h.inspect
   end
 
@@ -1026,7 +1058,7 @@ class InCallConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'InCallConstraint ' + @h.inspect
   end
 
@@ -1047,7 +1079,7 @@ class PhoneRingingConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     @s = @h[:ringing] ? 'Phone Ringing' : 'Not Ringing'
     super(colour: colour)
   end
@@ -1072,7 +1104,7 @@ class BrightnessConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'BrightnessConstraint ' + @h.inspect
   end
 
@@ -1093,7 +1125,7 @@ class VolumeConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     a = ['Volume On', 'Vibrate Only' 'Silent', 'Vibrate or Silent']
     
     "Ringer Volume\n  " + a[@h[:option]]
@@ -1115,7 +1147,7 @@ class SpeakerPhoneConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SpeakerPhoneConstraint ' + @h.inspect
   end
 
@@ -1136,7 +1168,7 @@ class DarkThemeConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'DarkThemeConstraint ' + @h.inspect
   end
 
@@ -1158,7 +1190,7 @@ class ScreenOnOffConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Screen ' + (@h[:screen_on] ? 'On' : 'Off')
   end
   
@@ -1182,7 +1214,7 @@ class VolumeLevelConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'VolumeLevelConstraint ' + @h.inspect
   end
 
@@ -1204,8 +1236,12 @@ class FaceUpDownConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
-    'FaceUpDownConstraint ' + @h.inspect
+  def to_s(colour: false, indent: 0)
+    a = ['Face Up', 'Face Down', 'Vertical Upright', 'Vertical Upside Down', 
+         'Sideways Left', 'Sideways Right']
+    s = @h[:selected_options].zip(a).select(&:first).map(&:last).join(', ')
+
+    'Device Facing' + "\n    " + s #+ @h.inspect
   end
 
   alias to_summary to_s
@@ -1227,7 +1263,7 @@ class LightLevelConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     operator = @h[:light_level] == -1 ? 'Less than' : 'Greater than'    
     condition = operator + ' ' + @h[:light_level_float].to_s + 'lx'
@@ -1251,7 +1287,7 @@ class DeviceOrientationConstraint < Constraint
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'DeviceOrientationConstraint ' + @h.inspect
   end
 
@@ -1272,7 +1308,7 @@ class ProximitySensorConstraint < Constraint
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Proximity Sensor: ' + (@h[:near] ? 'Near' : 'Far')
   end
 

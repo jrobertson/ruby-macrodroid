@@ -53,14 +53,14 @@ class Action < MacroObject
     "%s/%s: %s" % [@group, @type, s]
   end  
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
 
     h = @h.clone    
     h.delete :macro
     @s ||= "#<%s %s>" % [self.class, h.inspect]
     operator = @h[:is_or_condition] ? 'OR' : 'AND'
     constraints = @constraints.map \
-        {|x| x.to_summary(colour: colour)}.join(" %s " % operator)
+        {|x| '  ' * indent + x.to_summary(colour: colour)}.join(" %s " % operator)
     
     @s + constraints
     
@@ -97,7 +97,7 @@ class LaunchActivityAction < ApplicationAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Launch ' + @h[:application_name]
   end
 
@@ -118,7 +118,7 @@ class KillBackgroundAppAction < ApplicationAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'KillBackgroundAppAction ' + @h.inspect
   end
 
@@ -139,7 +139,7 @@ class LaunchShortcutAction < ApplicationAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     @s = "Launch Shortcut: " + @h[:app_name] + "\n  " + @h[:name]
     super()
   end
@@ -168,7 +168,7 @@ class OpenWebPageAction < ApplicationAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     "HTTP GET\n  url: " + @h[:url_to_open]
   end
 
@@ -199,7 +199,7 @@ class UploadPhotoAction < CameraAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'UploadPhotoAction ' + @h.inspect
   end
 
@@ -229,7 +229,7 @@ class TakePictureAction < CameraAction
     'take_photo :' + camera.to_s
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Take Picture'
   end  
 
@@ -256,7 +256,7 @@ class IfConfirmedThenAction < Action
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     @s = "If Confirmed Then " #+ @constraints.map(&:to_s).join(" %s " % operator)
     super(colour: colour)
@@ -278,13 +278,13 @@ class LoopAction < Action
 
     super(h2)
     
-    @label = 'WHILE / DO '
+    @label = 'DO / WHILE '
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
-    @s = 'WHILE / DO '
+    @s = 'DO / WHILE '
     super()
     
   end
@@ -308,7 +308,7 @@ class EndLoopAction < Action
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     'End Loop '
     
@@ -342,7 +342,7 @@ class IfConditionAction < Action
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     @s = "If " #+ @constraints.map(&:to_s).join(" %s " % operator)
     super(colour: colour)
@@ -363,7 +363,7 @@ class ElseAction < Action
 
   end  
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Else'
   end
   
@@ -382,7 +382,7 @@ class ElseIfConditionAction < Action
 
   end  
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     @s = 'Else If '
     super()
   end
@@ -403,7 +403,7 @@ class EndIfAction < Action
 
   end  
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'End If'
   end
   
@@ -433,7 +433,7 @@ class SetAirplaneModeAction < ConnectivityAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     state = ['On', 'Off', 'Toggle'][@h[:state]]
     @s = 'Airplane Mode ' + state + "\n"
@@ -459,7 +459,7 @@ class SetWifiAction < ConnectivityAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     action = @h[:state] == 0 ? 'Enable' : 'Disable'
     action + ' Wifi'
   end
@@ -481,7 +481,7 @@ class SetBluetoothAction < ConnectivityAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetBluetoothAction ' + @h.inspect
   end
 
@@ -503,7 +503,7 @@ class SetBluetoothAction < ConnectivityAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetBluetoothAction ' + @h.inspect
   end
 
@@ -523,7 +523,7 @@ class SetHotspotAction < ConnectivityAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     action = @h[:turn_wifi_on] ? 'Enable' : 'Disable'
     action + ' HotSpot'
   end
@@ -555,7 +555,7 @@ class SendIntentAction < ConnectivityAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Send Intent ' + "\n  " + @h[:action]
   end
 
@@ -595,7 +595,7 @@ class SetAlarmClockAction < DateTimeAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetAlarmClockAction ' + @h.inspect
   end
 
@@ -617,7 +617,7 @@ class StopWatchAction < DateTimeAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'StopWatchAction ' + @h.inspect
   end
 
@@ -648,7 +648,7 @@ class SayTimeAction < DateTimeAction
     'say current_time()'
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Say Current Time'
   end  
 
@@ -678,7 +678,7 @@ class AndroidShortcutsAction < DeviceAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'AndroidShortcutsAction ' + @h.inspect
   end
 
@@ -699,7 +699,7 @@ class ClipboardAction < DeviceAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Fill Clipboard' + "\n  " + @h[:clipboard_text] #+ @h.inspect
   end
 
@@ -719,7 +719,7 @@ class PressBackAction < DeviceAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'PressBackAction ' + @h.inspect
   end
 
@@ -747,7 +747,7 @@ class SpeakTextAction < DeviceAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     "Speak Text (%s)" % @h[:text_to_say]
   end
 
@@ -768,8 +768,43 @@ class UIInteractionAction < DeviceAction
 
   end
 
-  def to_s(colour: false)
-    'UIInteractionAction ' + @h.inspect
+  def to_s(colour: false, indent: 0)
+
+    ui = @h[:ui_interaction_configuration]
+    
+    option = -> do
+      detail = case ui[:click_option]
+      when 0 # 'Current focus'
+        'Current focus'
+      when 1 # 'Text content'
+        ui[:text_content]
+      when 2 # 'X, Y location'
+        "%s" % ui[:xy_point].values.join(',')
+      when 3 # 'Identify in app'
+        "id:%s" % ui[:view_id]
+      end      
+    end
+    
+    s = case @h[:action]
+    when 0 # 'Click'      
+      'Click' + " [%s]" % option.call
+    when 1 # 'Long Click'
+      'Long Click' + " [%s]" % option.call
+    when 2 # 'Copy'
+      'Copy'
+    when 3 # 'Cut'
+      'Cut'
+    when 4 # 'Paste'
+      "Paste [%s]" % (ui[:use_clipboard] ? 'Clipboard text' : ui[:text])
+    when 5 # 'Clear selection'
+      'Clear selection'
+    when 6 # 'Gesture'
+      detail = "%d ms: %d,%d -> %d,%d" % [ui[:duration_ms], ui[:start_x], 
+          ui[:start_y], ui[:end_x], ui[:end_y]]
+      "Gesture [%s]" % detail
+    end
+    
+    'UI Interaction' + "\n  " + s #+ ' ' + @h.inspect
   end
 
   alias to_summary to_s
@@ -788,7 +823,7 @@ class VoiceSearchAction < DeviceAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'VoiceSearchAction ' + @h.inspect
   end
 
@@ -819,7 +854,7 @@ class ExpandCollapseStatusBarAction < DeviceSettingsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'ExpandCollapseStatusBarAction ' + @h.inspect
   end
 
@@ -839,7 +874,7 @@ class LaunchHomeScreenAction < DeviceSettingsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'LaunchHomeScreenAction ' + @h.inspect
   end
 
@@ -870,7 +905,7 @@ class CameraFlashLightAction < DeviceSettingsAction
     ['torch :on', 'torch :off', 'torch :toggle'][@h[:state]]
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     ['Torch On', 'Torch Off', 'Torch Toggle'][@h[:state]]    
   end  
 
@@ -890,7 +925,7 @@ class VibrateAction < DeviceSettingsAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     pattern = [
       'Blip', 'Short Buzz', 'Long Buzz', 'Rapid', 'Slow', 'Increasing', 
@@ -917,7 +952,7 @@ class SetAutoRotateAction < DeviceSettingsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetAutoRotateAction ' + @h.inspect
   end
 
@@ -937,7 +972,7 @@ class DayDreamAction < DeviceSettingsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'DayDreamAction ' + @h.inspect
   end
 
@@ -957,7 +992,7 @@ class SetKeyboardAction < DeviceSettingsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetKeyboardAction ' + @h.inspect
   end
 
@@ -978,7 +1013,7 @@ class SetKeyguardAction < DeviceSettingsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetKeyguardAction ' + @h.inspect
   end
 
@@ -999,7 +1034,7 @@ class CarModeAction < DeviceSettingsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'CarModeAction ' + @h.inspect
   end
 
@@ -1021,7 +1056,7 @@ class ChangeKeyboardAction < DeviceSettingsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'ChangeKeyboardAction ' + @h.inspect
   end
 
@@ -1047,7 +1082,7 @@ class SetWallpaperAction < DeviceSettingsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetWallpaperAction ' + @h.inspect
   end
 
@@ -1082,7 +1117,7 @@ class FileOperationV21Action < FileAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     operation = ['Copy', 'Move', 'Delete', 'Create Folder']
     file = ['All Files', 'All Media Files', 'Images', 'Audio', 'Videos', 'Specify File Pattern', 'Folder']
@@ -1114,7 +1149,7 @@ class OpenFileAction < FileAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'OpenFileAction ' + @h.inspect
   end
 
@@ -1139,7 +1174,7 @@ class WriteToFileAction < FileAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Write To File' + "\n  " + @h[:filename] #+ @h.inspect
   end
 
@@ -1168,7 +1203,7 @@ class ForceLocationUpdateAction < LocationAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'ForceLocationUpdateAction ' + @h.inspect
   end
 
@@ -1208,7 +1243,7 @@ class ShareLocationAction < LocationAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     @s = 'Share Location' + "\n  GPS" # + @h.inspect
     super()
   end
@@ -1232,7 +1267,7 @@ class SetLocationUpdateRateAction < LocationAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetLocationUpdateRateAction ' + @h.inspect
   end
 
@@ -1275,7 +1310,7 @@ class AddCalendarEntryAction < LoggingAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'AddCalendarEntryAction ' + @h.inspect
   end
 
@@ -1297,7 +1332,7 @@ class LogAction < LoggingAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'LogAction ' + @h.inspect
   end
 
@@ -1318,7 +1353,7 @@ class ClearLogAction < LoggingAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'ClearLogAction ' + @h.inspect
   end
 
@@ -1340,7 +1375,7 @@ class ConfirmNextAction < Action
     
   end  
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     @s = 'Confirm Next'  + "\n  %s: %s" % [@h[:title], @h[:message]]
     super()
@@ -1364,7 +1399,7 @@ class ExportMacrosAction < Action
     
   end  
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     'Export macros'
     
@@ -1393,7 +1428,7 @@ class SetVariableAction < Action
     
   end  
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     input = if @h[:user_prompt] then
       '[User Prompt]'
@@ -1450,7 +1485,7 @@ class TextManipulationAction < Action
     
   end  
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     #tm = @h[:text_manipulation][:type]
 
@@ -1493,7 +1528,7 @@ class PauseAction < Action
     
   end  
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     su = Subunit.new(units={minutes:60, hours:60}, 
                      seconds: @h[:delay_in_seconds])
@@ -1537,7 +1572,7 @@ class RecordMicrophoneAction < MediaAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'RecordMicrophoneAction ' + @h.inspect
   end
 
@@ -1559,7 +1594,7 @@ class PlaySoundAction < MediaAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Play: ' + @h[:file_path]
   end
 
@@ -1595,7 +1630,7 @@ class SendEmailAction < MessagingAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     recipient = @h[:email_address]
     @s = 'Send EmailAction' + "\n  To: " + recipient #+ ' ' + @h.inspect
     super()
@@ -1623,7 +1658,7 @@ class SendSMSAction < MessagingAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SendSMSAction ' + @h.inspect
   end
 
@@ -1646,7 +1681,7 @@ class UDPCommandAction < MessagingAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'UDPCommandAction ' + @h.inspect
   end
 
@@ -1685,7 +1720,7 @@ class ClearNotificationsAction < NotificationsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'ClearNotificationsAction ' + @h.inspect
   end
 
@@ -1717,7 +1752,7 @@ class MessageDialogAction < NotificationsAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'Display Dialog' + "\n  Battery at: [battery]"
   end
 
@@ -1737,7 +1772,7 @@ class AllowLEDNotificationLightAction < NotificationsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'AllowLEDNotificationLightAction ' + @h.inspect
   end
 
@@ -1758,7 +1793,7 @@ class SetNotificationSoundAction < NotificationsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetNotificationSoundAction ' + @h.inspect
   end
 
@@ -1779,7 +1814,7 @@ class SetNotificationSoundAction < NotificationsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetNotificationSoundAction ' + @h.inspect
   end
 
@@ -1800,7 +1835,7 @@ class SetNotificationSoundAction < NotificationsAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetNotificationSoundAction ' + @h.inspect
   end
 
@@ -1834,7 +1869,7 @@ class NotificationAction < NotificationsAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     "Display Notification\n  " + \
         "%s: %s" % [@h[:notification_subject], @h[:notification_text]]
   end
@@ -1881,7 +1916,7 @@ class ToastAction < NotificationsAction
     "popup_message '%s'" % @h[:message_text]
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     @s = "Popup Message\n  %s" % @h[:message_text]
   end
 
@@ -1911,7 +1946,7 @@ class AnswerCallAction < PhoneAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     @s = 'Answer Call' + "\n  "
     super()
   end
@@ -1933,7 +1968,7 @@ class ClearCallLogAction < PhoneAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'ClearCallLogAction ' + @h.inspect
   end
 
@@ -1953,7 +1988,7 @@ class OpenCallLogAction < PhoneAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'OpenCallLogAction ' + @h.inspect
   end
 
@@ -1973,7 +2008,7 @@ class RejectCallAction < PhoneAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     @s = 'Call Reject' + "\n  "
     super()
   end
@@ -1995,7 +2030,7 @@ class MakeCallAction < PhoneAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'MakeCallAction ' + @h.inspect
   end
 
@@ -2017,7 +2052,7 @@ class SetRingtoneAction < PhoneAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetRingtoneAction ' + @h.inspect
   end
 
@@ -2049,7 +2084,7 @@ class SetBrightnessAction < ScreenAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetBrightnessAction ' + @h.inspect
   end
 
@@ -2070,7 +2105,7 @@ class ForceScreenRotationAction < ScreenAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'ForceScreenRotationAction ' + @h.inspect
   end
 
@@ -2094,7 +2129,7 @@ class ScreenOnAction < ScreenAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     state = @h[:screen_off] ? 'Off' : 'On'
     state += ' ' + 'No Lock (root only)' if @h[:screen_off_no_lock]
@@ -2122,7 +2157,7 @@ class DimScreenAction < ScreenAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'DimScreenAction ' + @h.inspect
   end
 
@@ -2150,7 +2185,7 @@ class KeepAwakeAction < ScreenAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     screen = @h[:screen_option] == 0 ? 'Screen On' : 'Screen Off'
     
@@ -2191,7 +2226,7 @@ class SetScreenTimeoutAction < ScreenAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SetScreenTimeoutAction ' + @h.inspect
   end
 
@@ -2222,7 +2257,7 @@ class SilentModeVibrateOffAction < VolumeAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SilentModeVibrateOffAction ' + @h.inspect
   end
 
@@ -2244,7 +2279,7 @@ class SetVibrateAction < VolumeAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     
     a = [
       'Silent (Vibrate On)',
@@ -2281,7 +2316,7 @@ class VolumeIncrementDecrementAction < VolumeAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'VolumeIncrementDecrementAction ' + @h.inspect
   end
 
@@ -2303,7 +2338,7 @@ class SpeakerPhoneAction < VolumeAction
 
   end
 
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     'SpeakerPhoneAction ' + @h.inspect
   end
 
@@ -2328,7 +2363,7 @@ class SetVolumeAction < VolumeAction
 
   end
   
-  def to_s(colour: false)
+  def to_s(colour: false, indent: 0)
     volume = @h[:stream_index_array].zip(@h[:stream_volume_array]).to_h[true]
     'Volume Change ' + "Notification = %s%%" % volume    
   end
