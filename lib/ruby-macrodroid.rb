@@ -551,7 +551,7 @@ class Macro
         inner_lines = e.xpath('item/description/text()')        
         
         action = if e.text.to_s.strip.empty? then
-          inner_lines.shift
+          inner_lines.shift.strip
         else
           e.text.strip
         end
@@ -659,21 +659,63 @@ EOF
     
   def to_s(colour: false)
     
-    indent = 0
+    indent = 0 #@actions.map(&:to_s).join.lines.length > 0 ? 1 : 0
+    
+    a = []
+    a << '# ' + @category + "\n" if @category
+    a <<  (colour ? "m".bg_cyan.gray.bold : 'm') + ': ' + @title
+
+    
+    if @description and @description.length >= 1 then
+      a << (colour ? "d".bg_gray.gray.bold : 'd') + ': ' \
+               + @description.gsub(/\n/,"\n  ")
+    end    
+    
+    if @local_variables.length >= 1 then
+      
+      vars = @local_variables.map do |k,v|
+        label = colour ? 'v'.bg_magenta : 'v'
+        label += ': '
+        label + "%s: %s" % [k,v]
+      end
+      
+      a << vars.join("\n")
+    end    
+    
+    a << @triggers.map do |x|
+      s =-x.to_s(colour: colour)
+      
+      s2 = if s.lines.length > 1 then        
+        "\n" + s.lines.map {|x| x.prepend ('  ' * (indent+1)) }.join
+      else
+        ' ' + s
+      end         
+      #s.lines > 1 ? "\n" + x : x
+      (colour ? "t".bg_red.gray.bold : 't') + ":" + s2
+    end.join("\n")
+    
     actions = @actions.map do |x|
 
+
       s = x.to_s(colour: colour)
-      if s.lines.length > 1 then
-        lines = s.lines
-        s = lines[0] + lines[1..-1].map {|x| x.prepend ('  ' * indent) }.join
-      end
+      #puts 's: ' + s.inspect      
+      
+
       
       r = if indent <= 0 then
       
+        lines = s.lines
+        
+        if lines.length > 1 then        
+          s = lines.map {|x| x.prepend ('  ' * (indent+1)) }.join
+        end      
+
+        s2 = s.lines.length > 1 ? "\n" + s : ' ' + s        
+        
         if colour then
-          "a".bg_blue.gray.bold + ": %s" % s
+          "a".bg_blue.gray.bold + ":" + s2
         else
-          "a: %s" % s
+          "a:" + s2
         end
         
       elsif indent > 0 
@@ -684,7 +726,8 @@ EOF
           indent -= 1
           ('  ' * indent) + "%s" % s
         else
-          ('  ' * indent) + "%s" % s
+          s2 = s.lines[0] + s.lines[1..-1].map {|x| ('  ' * indent) + x }.join
+          ('  ' * indent) + "%s" % s2
         end        
         
       end
@@ -711,29 +754,9 @@ EOF
       
     end.join("\n")
 
-    a = []
-    a << '# ' + @category + "\n" if @category
-    a <<  (colour ? "m".bg_cyan.gray.bold : 'm') + ': ' + @title
 
     
-    if @description and @description.length >= 1 then
-      a << (colour ? "d".bg_gray.gray.bold : 'd') + ': ' \
-               + @description.gsub(/\n/,"\n  ")
-    end    
-    
-    if @local_variables.length >= 1 then
-      
-      vars = @local_variables.map do |k,v|
-        label = colour ? 'v'.bg_magenta : 'v'
-        label += ': '
-        label + "%s: %s" % [k,v]
-      end
-      
-      a << vars.join("\n")
-    end
-    
-    a << @triggers.map {|x| (colour ? "t".bg_red.gray.bold : 't') \
-                     + ": %s" % x}.join("\n")
+
     a << actions
 
     

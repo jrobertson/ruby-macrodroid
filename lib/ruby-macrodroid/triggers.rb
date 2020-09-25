@@ -58,9 +58,9 @@ class Trigger < MacroObject
     @s ||= "#<%s %s>" % [self.class, h.inspect]
     operator = @h[:is_or_condition] ? 'OR' : 'AND'
     constraints = @constraints.map \
-        {|x| x.to_summary(colour: colour, indent: 1)}.join(" %s " % operator)
+        {|x| 'c: ' + x.to_summary(colour: colour, indent: 1)}.join(" %s " % operator)
     
-    @constraints.any? ? @s + "\n  " + constraints : @s
+    @constraints.any? ? @s + "\n" + constraints : @s
     
   end  
 
@@ -1152,7 +1152,7 @@ class NotificationTrigger < DeviceEventsTrigger
 
   def to_s(colour: false)
     s = (@h[:package_name_list] + @h[:application_name_list]).uniq.join(', ')
-    'Notification Received ' + "\n    Any Content (%s)" % s
+    'Notification Received ' + "\n  Any Content (%s)" % s
   end
 
   alias to_summary to_s
@@ -1427,6 +1427,10 @@ class ShakeDeviceTrigger < SensorsTrigger
   def to_s(colour: false)
     'Shake Device'
   end
+  
+  def to_summary(colour: false)
+    'Shake Device'
+  end  
 
 end
 

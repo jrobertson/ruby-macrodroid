@@ -53,18 +53,6 @@ class Action < MacroObject
     "%s/%s: %s" % [@group, @type, s]
   end  
   
-  def to_s(colour: false, indent: 0)
-
-    h = @h.clone    
-    h.delete :macro
-    @s ||= "#<%s %s>" % [self.class, h.inspect]
-    operator = @h[:is_or_condition] ? 'OR' : 'AND'
-    constraints = @constraints.map \
-        {|x| '  ' * indent + x.to_summary(colour: colour)}.join(" %s " % operator)
-    
-    @s + constraints
-    
-  end  
   
 end
 
@@ -140,7 +128,7 @@ class LaunchShortcutAction < ApplicationAction
   end
   
   def to_s(colour: false, indent: 0)
-    @s = "Launch Shortcut: " + @h[:app_name] + "\n  " + @h[:name]
+    @s = "Launch Shortcut: " + @h[:app_name] + "\n" + @h[:name]
     super()
   end
   
@@ -169,7 +157,8 @@ class OpenWebPageAction < ApplicationAction
   end
   
   def to_s(colour: false, indent: 0)
-    "HTTP GET\n  url: " + @h[:url_to_open]
+    @s = "HTTP GET\nurl: " + @h[:url_to_open]
+    super()
   end
 
 end
@@ -284,10 +273,20 @@ class LoopAction < Action
 
   def to_s(colour: false, indent: 0)
     
+    h = @h.clone    
+    h.delete :macro
     @s = 'DO / WHILE '
-    super()
+    operator = @h[:is_or_condition] ? 'OR' : 'AND'
+    constraints = @constraints.map \
+        {|x| '  ' * indent + x.to_summary(colour: colour)}.join(" %s " % operator)    
     
-  end
+    out = []
+    out << "; %s" % @h[:comment] if @h[:comment]
+    s = @s.lines.map {|x| ('  ' * indent) + x}.join
+    out << s + constraints
+    out.join("\n")
+    
+  end    
 end
 
 # Conditions/Loops
@@ -344,10 +343,20 @@ class IfConditionAction < Action
 
   def to_s(colour: false, indent: 0)
     
-    @s = "If " #+ @constraints.map(&:to_s).join(" %s " % operator)
-    super(colour: colour)
+    h = @h.clone    
+    h.delete :macro
+    @s = 'If '
+    operator = @h[:is_or_condition] ? 'OR' : 'AND'
+    constraints = @constraints.map \
+        {|x| '  ' * indent + x.to_summary(colour: colour)}.join(" %s " % operator)    
     
-  end
+    out = []
+    out << "; %s" % @h[:comment] if @h[:comment]
+    s = @s.lines.map {|x| ('  ' * indent) + x}.join
+    out << s + constraints
+    out.join("\n")
+    
+  end  
 end
 
 class ElseAction < Action
@@ -383,8 +392,24 @@ class ElseIfConditionAction < Action
   end  
   
   def to_s(colour: false, indent: 0)
+    
+    h = @h.clone    
+    h.delete :macro
     @s = 'Else If '
-    super()
+    operator = @h[:is_or_condition] ? 'OR' : 'AND'
+    constraints = @constraints.map \
+        {|x| '  ' * indent + x.to_summary(colour: colour)}.join(" %s " % operator)    
+    
+    out = []
+    out << "; %s" % @h[:comment] if @h[:comment]
+    s = @s.lines.map {|x| ('  ' * indent) + x}.join
+    out << s + constraints
+    out.join("\n")
+    
+  end    
+  
+  def to_summary(colour: false)
+    'foo'
   end
     
 
@@ -436,7 +461,7 @@ class SetAirplaneModeAction < ConnectivityAction
   def to_s(colour: false, indent: 0)
     
     state = ['On', 'Off', 'Toggle'][@h[:state]]
-    @s = 'Airplane Mode ' + state + "\n"
+    @s = 'Airplane Mode ' + state
     super(colour: colour)
     
   end
@@ -618,7 +643,10 @@ class StopWatchAction < DateTimeAction
   end
 
   def to_s(colour: false, indent: 0)
-    'StopWatchAction ' + @h.inspect
+    option = ['Start', 'Pause','Reset','Reset and Restart'][@h[:option]]
+    name = @h[:stopwatch_name]
+    @s = "StopWatch (%s)" % option + "\n" + name #+ ' ' + @h.inspect
+    super()
   end
 
   alias to_summary to_s
@@ -1125,7 +1153,7 @@ class FileOperationV21Action < FileAction
     detail = @h[:from_name]
     detail += ' to: ' + @h[:to_name] if @h[:option] == 1
     @s = "%s %s" % [operation[@h[:option]], file[@h[:file_option]]]  \
-        + "\n  " + detail #+ @h.inspect        
+        + "\n" + detail #+ @h.inspect        
     super()
   end
 
@@ -1244,7 +1272,7 @@ class ShareLocationAction < LocationAction
   end
 
   def to_s(colour: false, indent: 0)
-    @s = 'Share Location' + "\n  GPS" # + @h.inspect
+    @s = 'Share Location' + "\nGPS" # + @h.inspect
     super()
   end
 
@@ -1360,6 +1388,31 @@ class ClearLogAction < LoggingAction
   alias to_summary to_s
 end
 
+
+# MacroDroid Specific
+#
+class CancelActiveMacroAction < Action
+  
+  def initialize(h={})
+    
+    options = {
+
+    }
+
+    super(h)
+    
+  end  
+  
+  def to_s(colour: false, indent: 0)
+    @s = 'Cancel Macro Actions' + "\n  " + @h[:macro_name] #+ ' ' + @h.inspect
+    super()
+    
+  end
+  
+  alias to_summary to_s
+  
+end
+
 # MacroDroid Specific
 #
 class ConfirmNextAction < Action
@@ -1377,7 +1430,7 @@ class ConfirmNextAction < Action
   
   def to_s(colour: false, indent: 0)
     
-    @s = 'Confirm Next'  + "\n  %s: %s" % [@h[:title], @h[:message]]
+    @s = 'Confirm Next'  + "\n%s: %s" % [@h[:title], @h[:message]]
     super()
     
   end
@@ -1461,7 +1514,7 @@ class SetVariableAction < Action
 
     end
     
-    @s = 'Set Variable' + ("\n  %s: " % @h[:variable][:name]) + input #+ @h.inspect
+    @s = 'Set Variable' + ("\n%s: " % @h[:variable][:name]) + input #+ @h.inspect
     super()
     
   end
@@ -1632,7 +1685,7 @@ class SendEmailAction < MessagingAction
 
   def to_s(colour: false, indent: 0)
     recipient = @h[:email_address]
-    @s = 'Send EmailAction' + "\n  To: " + recipient #+ ' ' + @h.inspect
+    @s = 'Send EmailAction' + "\nTo: " + recipient #+ ' ' + @h.inspect
     super()
   end
 
@@ -1707,7 +1760,7 @@ class ClearNotificationsAction < NotificationsAction
     options = {
       package_name_list: [],
       match_text: '',
-      application_name_list: [],
+      application_name_list: [],                  
       clear_persistent: false,
       excludes: false,
       match_option: 0,
@@ -1870,8 +1923,9 @@ class NotificationAction < NotificationsAction
   end
   
   def to_s(colour: false, indent: 0)
-    "Display Notification\n  " + \
+    @s = "Display Notification\n" + \
         "%s: %s" % [@h[:notification_subject], @h[:notification_text]]
+    super()
   end
 
 end
@@ -1917,7 +1971,8 @@ class ToastAction < NotificationsAction
   end
   
   def to_s(colour: false, indent: 0)
-    @s = "Popup Message\n  %s" % @h[:message_text]
+    @s = "Popup Message\n%s" % @h[:message_text]
+    super()
   end
 
 end
@@ -1947,7 +2002,7 @@ class AnswerCallAction < PhoneAction
   end
   
   def to_s(colour: false, indent: 0)
-    @s = 'Answer Call' + "\n  "
+    @s = 'Answer Call'
     super()
   end
 end
@@ -2009,7 +2064,7 @@ class RejectCallAction < PhoneAction
   end
   
   def to_s(colour: false, indent: 0)
-    @s = 'Call Reject' + "\n  "
+    @s = 'Call Reject'
     super()
   end
 
@@ -2085,7 +2140,9 @@ class SetBrightnessAction < ScreenAction
   end
 
   def to_s(colour: false, indent: 0)
-    'SetBrightnessAction ' + @h.inspect
+    val = @h[:brightness_percent] > 100 ? 'Auto' : @h[:brightness_percent].to_s + '%'
+    @s = 'Brightness' + "\n  " + val #@h.inspect
+    super()
   end
 
   alias to_summary to_s
@@ -2135,7 +2192,8 @@ class ScreenOnAction < ScreenAction
     state += ' ' + 'No Lock (root only)' if @h[:screen_off_no_lock]
     #state += ' ' + '(Alternative)' if @h[:screen_on_alternative]
     
-    'Screen ' + state
+    @s = 'Screen ' + state
+    super()
     
   end
 
@@ -2290,7 +2348,7 @@ class SetVibrateAction < VolumeAction
     ]
     
     status = a[@h[:option_int]]
-    @s = 'Vibrate Enable/Disable ' + "\n    " + status + "\n  "
+    @s = 'Vibrate Enable/Disable ' + "\n" + status
     super()
     
   end

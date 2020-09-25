@@ -454,6 +454,29 @@ end
 
 # Category: Date/Time
 #
+class StopWatchConstraint < Constraint
+
+  def initialize(h={})
+
+    options = {
+      days_of_week: [false, false, true, false, false, false, false]
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s(colour: false, indent: 0)
+    #'StopWatchConstraint ' + @h.inspect
+    operator = @h[:greater_than] ? '>' : '<'
+    "%s %s %s" % [@h[:stopwatch_name], operator, @h[:variable_name] ] #+ @h.inspect
+  end
+
+  alias to_summary to_s
+end
+
+# Category: Date/Time
+#
 class TimeOfDayConstraint < Constraint
 
   def initialize(h={})
@@ -1241,7 +1264,7 @@ class FaceUpDownConstraint < Constraint
          'Sideways Left', 'Sideways Right']
     s = @h[:selected_options].zip(a).select(&:first).map(&:last).join(', ')
 
-    'Device Facing' + "\n    " + s #+ @h.inspect
+    'Device Facing' + "\n  " + s #+ @h.inspect
   end
 
   alias to_summary to_s

@@ -54,16 +54,30 @@ class MacroObject
     @h[:siguid]
   end
   
-  def to_s(colour: false)
-
+  def to_s(colour: false, indent: 0)
+    
     h = @h.clone    
     h.delete :macro
     @s ||= "#<%s %s>" % [self.class, h.inspect]
     operator = @h[:is_or_condition] ? 'OR' : 'AND'
     constraints = @constraints.map \
-        {|x| x.to_summary(colour: colour)}.join(" %s " % operator)
+        {|x| 'c: ' + x.to_summary(colour: colour)}
     
-    @s + constraints
+    out = []
+    out << "; %s" % @h[:comment] if @h[:comment] and @h[:comment].length > 1
+    #s = @s.lines.map {|x| 'x' + x}.join
+    
+    lines = @s.lines
+    
+    if lines.length > 1 then        
+      s = lines[0] + lines[1..-1].map {|x| x.prepend ('  ' * (indent+1)) }.join
+    else
+      s = @s
+    end
+    
+    out << s
+    out += constraints
+    out.join("\n")
     
   end
   
