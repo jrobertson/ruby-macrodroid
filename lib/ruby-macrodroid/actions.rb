@@ -1938,6 +1938,9 @@ class ToastAction < NotificationsAction
     
     h = if obj.is_a? Hash then
       obj
+    elsif obj.is_a? Rexle::Element
+      txt = obj.text('item/description')
+      {msg: (txt || obj.text)}
     else
       {msg: obj}
     end
