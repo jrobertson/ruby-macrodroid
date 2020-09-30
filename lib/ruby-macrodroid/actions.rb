@@ -42,11 +42,11 @@ class Action < MacroObject
     macro = h[:macro]
     h.delete :macro
     super(h)
-    
-    # fetch the constraints                               
+
     @constraints = @h[:constraint_list].map do |constraint|
       object(constraint.to_snake_case.merge(macro: macro))
-    end       
+    end
+    
   end
   
   def invoke(s='')    
@@ -317,25 +317,49 @@ end
 # Conditions/Loops
 #
 class IfConditionAction < Action
-  
+
   def initialize(obj=nil)
+
+    options = {
+      a: true,
+      constraint_list: []
+    }  
     
-    h = if obj.is_a? Hash then
-      obj
+    if obj.is_a? Hash then
+      
+      h = obj
+      macro = h[:macro]
+      h2 = options.merge(filter(options,h).merge(macro: macro))
+      super(h2)      
+      
+    elsif obj.is_a? Rexle::Element
+      super() 
+      raw_txt = obj.text('item/description') || obj.text.to_s
+      puts 'raw_txt: ' + raw_txt.inspect if $debug
+      
+      clause = raw_txt[/^if (.*)/i,1]
+      conditions = clause.split(/\s+\b(?:AND|OR)\b\s+/i)
+      
+      cp = ConstraintsNlp.new      
+      
+      @constraints = conditions.map do |c|
+        puts 'c: ' + c.inspect 
+        r = cp.find_constraint c
+        puts 'found constraint ' + r.inspect if $debug
+        
+        r[0].new(r[1]) if r
+        
+      end         
+      puts '@constraints: ' + @constraints.inspect if $debug
+      {}
     else
       # get the constraints
 
     end
     
-    options = {
-      a: true,
-      constraint_list: ''
-    }
-    
-    macro = h[:macro]
-    h2 = options.merge(filter(options,h).merge(macro: macro))
 
-    super(h2)
+    
+
     
     @label = 'If '
 
@@ -418,10 +442,17 @@ end
 
 class EndIfAction < Action
   
-  def initialize(h={})
-
+  def initialize(obj={})
+    
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Rexle::Element    
+      {}
+    end
+    
+  
     options = {
-      constraint_list: ''
+      constraint_list: []
     }
 
     super(options.merge h)
@@ -431,6 +462,8 @@ class EndIfAction < Action
   def to_s(colour: false, indent: 0)
     'End If'
   end
+  
+  alias to_summary to_s
   
 end
 

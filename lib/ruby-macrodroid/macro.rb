@@ -7,6 +7,17 @@
 #  
 #  Macro
 
+
+
+VAR_TYPES = {
+  String: [2, :string_value], 
+  TrueClass: [0, :boolean_value], 
+  TrueClass: [0, :boolean_value],
+  Integer: [1, :int_value],
+  Float: [3, :decimal_value]
+}
+
+
 class Macro
   using ColouredText
   using Params
@@ -50,7 +61,7 @@ class Macro
   def to_h()
 
     h = {
-      local_variables: @local_variables,
+      local_variables: varify(@local_variables),
       m_trigger_list: @triggers.map(&:to_h),
       m_action_list: @actions.map(&:to_h),
       m_category: @category,
@@ -183,9 +194,13 @@ class Macro
       
       @title = node.text('macro') || node.attributes[:name]
       
+      @local_variables = node.xpath('variable').map do |e|
+        e.text.split(/: +/,2)
+      end
+      
       #@description = node.attributes[:description]      
       
-      tp = TriggersNlp.new      
+      tp = TriggersNlp.new(self)      
       
       @triggers = node.xpath('trigger').map do |e|
         
@@ -226,8 +241,13 @@ class Macro
                 e.text.strip
               end
               
+              puts 'action: ' + action.inspect if @debug
+              
               r = ap.find_action action          
-              r[0].new(description) if r              
+              puts 'r: ' + r.inspect if @debug
+              o = r[0].new(description) if r              
+              puts 'after o'
+              o
               
             end
             
@@ -354,6 +374,8 @@ EOF
       
       a << vars.join("\n")
     end    
+
+    puts 'before triggers' if @debug
     
     a << @triggers.map do |x|
       s =-x.to_s(colour: colour)
@@ -367,9 +389,11 @@ EOF
       (colour ? "t".bg_red.gray.bold : 't') + ":" + s2
     end.join("\n")
     
+    puts 'before actions' if @debug
     actions = @actions.map do |x|
 
-
+      puts 'x: ' + x.inspect if @debug
+      raise 'Macro#to_s action cannot be nil' if x.nil?
       s = x.to_s(colour: colour)
       #puts 's: ' + s.inspect      
       
@@ -433,6 +457,7 @@ EOF
     a << actions
 
     
+    puts 'before constraints' if @debug
     if @constraints.any? then
       a << @constraints.map do |x|
         (colour ? "c".bg_green.gray.bold : 'c') + ": %s" % x
@@ -507,6 +532,28 @@ EOF
       puts 'r:' + r.inspect
       r
       
+    end
+    
+  end
+  
+  def varify(local_variables)
+    
+        
+    local_variables.map do |key, value|
+      
+      
+      type = VAR_TYPES[value.class.to_s.to_sym]
+      
+      h = {
+        boolean_value: false,
+        decimal_value: 0.0,
+        int_value: 0,
+        name: key,
+        string_value: '',
+        type: type[0]
+      }
+      h[type[1]] = value
+      h
     end
     
   end

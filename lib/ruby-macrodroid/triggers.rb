@@ -421,15 +421,22 @@ class WebHookTrigger < Trigger
     options = {
       identifier: ''
     }
+    @deviceid = h[:macro].deviceid
 
+    
+    if h[:identifier].nil? or h[:identifier].empty? then
+      h[:identifier] = h[:macro].title.downcase
+    end
+    
     super(options.merge h)
+    @list << 'identifier'
 
   end
 
   def to_s(colour: false)
     
     url = "https://trigger.macrodroid.com/%s/%s" % \
-        [@h[:macro].deviceid, @h[:identifier]]
+        [@deviceid, @h[:identifier]]
     @s = 'WebHook (Url)' + "\n  " + url
     super()
 

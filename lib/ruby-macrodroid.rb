@@ -47,10 +47,10 @@ EOF
 class TriggersNlp
   include AppRoutes
 
-  def initialize()
+  def initialize(macro=nil)
 
     super()
-    params = {}
+    params = {macro: macro}
     triggers(params)
 
   end
@@ -113,7 +113,18 @@ class TriggersNlp
       
       [ProximityTrigger, {distance: distance}]
     end    
+    
+    get /^WebHook \(Url\)/i do       
+      [WebHookTrigger, params]
+    end      
 
+    get /^WebHook/i do       
+      [WebHookTrigger, params]
+    end
+    
+    get /^wh/i do       
+      [WebHookTrigger, params]
+    end          
     
     
   end
@@ -166,7 +177,7 @@ class ActionsNlp
     end    
     
     get /^Torch :?(.*)/i do |onoffstate|
-      state = onoffstate.downcase == 'on' ? 0 : 1
+      state = %w(on off toggle).index onoffstate.downcase
       [CameraFlashLightAction, {state: state}]
     end    
     
@@ -249,11 +260,15 @@ class ActionsNlp
       [KeepAwakeAction, {enabled: false, screen_option: 0}]
     end    
 
-    #a: Disable Keep Awake
+    #e.g a: if Airplane mode enabled
     #
     get /if (.*)/i do
       [IfConditionAction, {}]
-    end      
+    end
+    
+    get /End If/i do
+      [EndIfAction, {}]
+    end          
 
   end
 
@@ -276,7 +291,7 @@ class ConstraintsNlp
   def constraints(params) 
 
     get /^airplane mode (.*)/i do |state|
-      [AirplaneModeConstraint, {enabled: (state =~ /^enabled|on$/) == 0}]
+      [AirplaneModeConstraint, {enabled: (state =~ /^enabled|on$/i) == 0}]
     end
 
   end
@@ -347,6 +362,7 @@ class MacroDroidError < Exception
 end
 
 class MacroDroid
+  include RXFHelperModule
   using ColouredText
   using Params  
 
@@ -387,10 +403,16 @@ class MacroDroid
           puts 'before RowX.new' if @debug
 
           s2 = s.gsub(/^g:/,'geofence:').gsub(/^m:/,'macro:')\
-              .gsub(/^t:/,'trigger:').gsub(/^a:/,'action:')\
-              .gsub(/^c:/,'constraint:').gsub(/^#.*/,'')
+              .gsub(/^v:/,'variable:').gsub(/^t:/,'trigger:')\
+              .gsub(/^a:/,'action:').gsub(/^c:/,'constraint:').gsub(/^#.*/,'')
           
-          raw_macros, raw_geofences = s2.split(/(?=^macro:)/,2).reverse
+          a = s2.split(/(?=^macro:)/)
+          
+          raw_geofences = a.shift if a.first =~ /^geofence/
+          raw_macros = a.join
+          #raw_macros, raw_geofences .reverse
+          
+          puts 'raw_macros: ' + raw_macros.inspect if @debug
           
           if raw_geofences then
             
@@ -457,14 +479,16 @@ class MacroDroid
 
     }    
   end
+  
+  def export(filepath)
+    FileX.write filepath, to_json
+  end
 
-  def export_json()
+  def to_json()
 
     to_h.to_json
 
   end
-
-  alias to_json export_json
   
 
   def to_h()
@@ -610,7 +634,7 @@ class MacroDroid
     end
        
     @macros = doc.root.xpath('macro').map do |node|
-          
+      puts 'node: ' + node.inspect if @debug    
       Macro.new(geofences: @geofences.map(&:last), deviceid: @deviceid, 
                 debug: @debug).import_xml(node)
       
@@ -811,7 +835,68 @@ class DroidSim
 
 end
 
+RD_MACROS =<<EOF
+m: Torch
+t: webhook
+a: Torch toggle
+EOF
+
+module RemoteDroid
+
+  class Service
+    def initialize(callback)
+      @callback = callback
+    end
+  end
+  
+  class Bluetooth
+    def enable()
+    end
+  end
+  
+  class Torch < Service
+        
+    def toggle()
+      @callback.call :torch      
+    end
+    
+  end
+
+  class Control        
+    
+    def initialize(deviceid: nil)
+      @deviceid = deviceid
+      @torch = Torch.new(self)
+    end
+    
+    def bluetooth()
+      @bluetooth
+    end
+    
+    def call(command)
+      url = "https://trigger.macrodroid.com/%s/%s" % [@deviceid, command]
+      puts 'url: ' + url.inspect
+      s = open(url).read      
+    end
+    
+    def torch()
+      @torch
+    end
+
+    def write(s)
+      
+      MacroDroid.new(RD_MACROS, deviceid: @deviceid).export s
+      
+    end
+    
+    alias export write
+    
+  end
+
+end
+
 require 'ruby-macrodroid/base'
 require 'ruby-macrodroid/triggers'
 require 'ruby-macrodroid/actions'
 require 'ruby-macrodroid/constraints'
+require 'ruby-macrodroid/macro'
