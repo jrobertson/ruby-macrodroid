@@ -49,8 +49,8 @@ class Action < MacroObject
     
   end
   
-  def invoke(s='')    
-    "%s/%s: %s" % [@group, @type, s]
+  def invoke(h={})    
+    "%s/%s: %s" % [@group, @type, h.to_json]
   end  
   
   
@@ -136,23 +136,46 @@ class LaunchShortcutAction < ApplicationAction
 
 end
 
+class OpenWebPageActionError < Exception
+end
+
 # Category: Applications
 #
 class OpenWebPageAction < ApplicationAction
 
-  def initialize(h={})
+  def initialize(obj={})
+    
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      txt = e.text('item/description')
+      {url: (txt || e.text)}
+    end    
     
     h[:url_to_open] = h[:url] if h[:url]
 
     options = {
-      variable_to_save_response: {:m_stringValue=>"", :m_name=>"", :m_decimalValue=>0.0, :isLocal=>true, :m_booleanValue=>false, :excludeFromLog=>false, :m_intValue=>0, :m_type=>2},
+      variable_to_save_response: {:m_stringValue=>"", :m_name=>"", 
+      m_decimalValue: 0.0, isLocal: true, m_booleanValue: false, 
+      excludeFromLog: false, m_intValue: 0, m_type: 2},
       url_to_open: '',
       http_get: true,
       disable_url_encode: false,
       block_next_action: false
     }
-
-    super(options.merge filter(options,h))
+    
+    if h[:macro].remote_url.nil? then
+      raise OpenWebPageActionError, 'remote_url not found'
+    end
+    
+    if (h[:identifier].nil? or h[:identifier].empty?) and 
+        (h[:url_to_open].nil? or h[:url_to_open].empty?) then
+      h[:url_to_open] = h[:macro].remote_url.sub(/\/$/,'') + '/' + 
+          h[:macro].title.downcase.gsub(/ +/,'-')
+    end
+    
+    super(options.merge h)
 
   end
   
@@ -1971,11 +1994,10 @@ class ToastAction < NotificationsAction
     
     h = if obj.is_a? Hash then
       obj
-    elsif obj.is_a? Rexle::Element
-      txt = obj.text('item/description')
-      {msg: (txt || obj.text)}
-    else
-      {msg: obj}
+    elsif obj.is_a? Array
+      e, macro = obj
+      txt = e.text('item/description')
+      {msg: (txt || e.text)}
     end
 
     if h[:msg] then
@@ -1999,7 +2021,7 @@ class ToastAction < NotificationsAction
   end
   
   def invoke()
-    super(@h[:message_text])
+    super(msg: @h[:message_text])
   end
   
   def to_pc()

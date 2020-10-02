@@ -24,11 +24,13 @@ class Macro
 
   attr_reader :local_variables, :triggers, :actions, :constraints, 
       :guid, :deviceid
-  attr_accessor :title, :description
+  attr_accessor :title, :description, :remote_url
 
-  def initialize(name=nil, geofences: nil, deviceid: nil, debug: false)
+  def initialize(name=nil, geofences: nil, deviceid: nil, remote_url: nil, 
+                 debug: false)
 
     @title, @geofences, @deviceid, @debug = name, geofences, deviceid, debug
+    @remote_url = remote_url
     
     puts 'inside Macro#initialize' if @debug    
           
@@ -195,30 +197,89 @@ class Macro
       @title = node.text('macro') || node.attributes[:name]
       
       @local_variables = node.xpath('variable').map do |e|
-        e.text.split(/: +/,2)
+        
+        label, v = e.text.to_s.split(/: */,2)
+        
+        value = if v.to_f.to_s == v
+          v.to_f
+        elsif v.downcase == 'true'
+          true
+        elsif v.downcase == 'false' 
+          false
+        elsif v.to_i.to_s == v
+          v.to_i
+        else
+          v
+        end
+        
+        [label, value]
       end
       
       #@description = node.attributes[:description]      
       
       tp = TriggersNlp.new(self)      
       
-      @triggers = node.xpath('trigger').map do |e|
+      @triggers = node.xpath('trigger').flat_map do |e|
         
         r = tp.find_trigger e.text
         
         puts 'found trigger ' + r.inspect if @debug
         
-        if r then
-          if r[0] == GeofenceTrigger then
-            GeofenceTrigger.new(r[1], geofences: @geofences)
+        item = e.element('item')
+        if item then
+          
+          if item.element('description') then
+            
+            item.xpath('description').map do |description|
+              
+              inner_lines = description.text.to_s.strip.lines
+              puts 'inner_lines: ' + inner_lines.inspect if @debug
+              
+              trigger = if e.text.to_s.strip.empty? then
+                inner_lines.shift.strip
+              else
+                e.text.strip
+              end
+              
+              puts 'trigger: ' + trigger.inspect if @debug
+              
+              r = tp.find_trigger trigger          
+              puts 'r: ' + r.inspect if @debug
+              o = r[0].new([description, self]) if r              
+              puts 'after o' if @debug
+              o
+              
+            end
+            
           else
-            r[0].new(r[1])
+            
+            trigger = e.text.strip
+            r = tp.find_trigger trigger
+
+            a = e.xpath('item/*')
+
+            h = if a.any? then
+              a.map {|node| [node.name.to_sym, node.text.to_s]}.to_h
+            else
+              {}
+            end
+
+            r = tp.find_trigger trigger          
+            r[0].new(h) if r
+            
           end
+          
+        else
+          
+          trigger = e.text.strip
+          r = tp.find_trigger trigger
+          r[0].new(r[1]) if r
+          
         end
         
       end
       
-      ap = ActionsNlp.new      
+      ap = ActionsNlp.new self    
       
       @actions = node.xpath('action').flat_map do |e|
         
@@ -245,8 +306,8 @@ class Macro
               
               r = ap.find_action action          
               puts 'r: ' + r.inspect if @debug
-              o = r[0].new(description) if r              
-              puts 'after o'
+              o = r[0].new([description, self]) if r
+              puts 'after o' if @debug
               o
               
             end
@@ -378,13 +439,20 @@ EOF
     puts 'before triggers' if @debug
     
     a << @triggers.map do |x|
+      
+      puts 'x: ' + x.inspect if @debug
+      
       s =-x.to_s(colour: colour)
+      puts 's: ' + s.inspect if @debug
       
       s2 = if s.lines.length > 1 then        
         "\n" + s.lines.map {|x| x.prepend ('  ' * (indent+1)) }.join
       else
         ' ' + s
       end         
+      
+      puts 's2: ' + s2.inspect if @debug
+      
       #s.lines > 1 ? "\n" + x : x
       (colour ? "t".bg_red.gray.bold : 't') + ":" + s2
     end.join("\n")
@@ -540,10 +608,11 @@ EOF
     
         
     local_variables.map do |key, value|
-      
-      
+            
+      puts 'value ' + value.class.to_s.to_sym.inspect
+      puts 'VAR_TYPES: ' + VAR_TYPES.inspect
       type = VAR_TYPES[value.class.to_s.to_sym]
-      
+      puts 'type: ' + type.inspect
       h = {
         boolean_value: false,
         decimal_value: 0.0,

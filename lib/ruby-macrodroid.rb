@@ -141,10 +141,10 @@ end
 class ActionsNlp
   include AppRoutes
 
-  def initialize()
+  def initialize(macro=nil)
 
     super()
-    params = {}
+    params = {macro: macro}
     actions(params)
 
   end
@@ -230,8 +230,20 @@ class ActionsNlp
     
     # e.g. webhook entered_kitchen
     #
-    get /webhook|HTTP GET/i do
-      [OpenWebPageAction, {}]
+    get /(?:webhook|HTTP GET) ([^$]+)$/i do |s|
+      key = s =~ /^http/ ? :url_to_open : :identifier      
+      [OpenWebPageAction, {key => s}]
+    end
+    
+    #
+    get /^WebHook \(Url\)/i do
+      [OpenWebPageAction, params]
+    end
+    
+    # e.g. webhook entered_kitchen
+    #
+    get /^webhook$/i do
+      [OpenWebPageAction, params]
     end
     
     #a: Keep Device Awake Screen On Until Disabled
@@ -367,14 +379,14 @@ class MacroDroid
   using Params  
 
   attr_reader :macros, :geofences, :yaml
-  attr_accessor :deviceid
+  attr_accessor :deviceid, :remote_url
   
   # note: The deviceid can only be found from an existing Webhook trigger, 
   #       generated from MacroDroid itself.
 
-  def initialize(obj=nil, deviceid: nil, debug: false)
+  def initialize(obj=nil, deviceid: nil, remote_url: nil, debug: false)
 
-    @deviceid, @debug = deviceid, debug    
+    @deviceid, @remote_url, @debug = deviceid, remote_url, debug    
     
     @geofences = {}
     
@@ -590,7 +602,7 @@ class MacroDroid
 #       puts '@geofences: ' + @geofences.inspect if @debug
       
       m = Macro.new(geofences: @geofences.map(&:last), deviceid: @deviceid, 
-                    debug: @debug )
+                    remote_url: @remote_url, debug: @debug )
       m.import_h(macro)
       m
 
@@ -612,7 +624,7 @@ class MacroDroid
     @macros = doc.root.xpath('item').map do |node|
       puts ('geofences: ' + geofences.inspect).highlight if @debug
       Macro.new(geofences: geofences.map(&:last), deviceid: @deviceid, 
-                debug: @debug).import_xml(node)
+                remote_url: @remote_url, debug: @debug).import_xml(node)
       
     end
 
@@ -835,65 +847,6 @@ class DroidSim
 
 end
 
-RD_MACROS =<<EOF
-m: Torch
-t: webhook
-a: Torch toggle
-EOF
-
-module RemoteDroid
-
-  class Service
-    def initialize(callback)
-      @callback = callback
-    end
-  end
-  
-  class Bluetooth
-    def enable()
-    end
-  end
-  
-  class Torch < Service
-        
-    def toggle()
-      @callback.call :torch      
-    end
-    
-  end
-
-  class Control        
-    
-    def initialize(deviceid: nil)
-      @deviceid = deviceid
-      @torch = Torch.new(self)
-    end
-    
-    def bluetooth()
-      @bluetooth
-    end
-    
-    def call(command)
-      url = "https://trigger.macrodroid.com/%s/%s" % [@deviceid, command]
-      puts 'url: ' + url.inspect
-      s = open(url).read      
-    end
-    
-    def torch()
-      @torch
-    end
-
-    def write(s)
-      
-      MacroDroid.new(RD_MACROS, deviceid: @deviceid).export s
-      
-    end
-    
-    alias export write
-    
-  end
-
-end
 
 require 'ruby-macrodroid/base'
 require 'ruby-macrodroid/triggers'

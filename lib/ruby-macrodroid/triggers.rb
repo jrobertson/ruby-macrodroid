@@ -416,19 +416,33 @@ end
 #
 class WebHookTrigger < Trigger
 
-  def initialize(h={})
+  def initialize(obj={})
+    
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      txt = e.text('item/description')
+      {url: (txt || e.text), macro: macro}
+    end        
+    
+    if h[:url] then
+      h[:identifier] = h[:url][/https:\/\/trigger.macrodroid.com\/(?:\w+\-){4}\w+\/([^$]+)/,1]
+    end
+
 
     options = {
       identifier: ''
     }
+    
     @deviceid = h[:macro].deviceid
 
     
     if h[:identifier].nil? or h[:identifier].empty? then
-      h[:identifier] = h[:macro].title.downcase
+      h[:identifier] = h[:macro].title.downcase.gsub(/ +/,'-')
     end
     
-    super(options.merge h)
+    super(options.merge filter(options,h))
     @list << 'identifier'
 
   end

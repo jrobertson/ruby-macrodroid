@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'ruby-macrodroid'
-  s.version = '0.8.12'
+  s.version = '0.9.0'
   s.summary = 'A macro builder for MacroDroid. #unofficialgem #experimental'
   s.authors = ['James Robertson']
   s.files = Dir[
@@ -14,10 +14,10 @@ Gem::Specification.new do |s|
   ]
   s.add_runtime_dependency('glw', '~> 0.2', '>=0.2.2')    
   s.add_runtime_dependency('uuid', '~> 2.3', '>=2.3.9')
-  s.add_runtime_dependency('rowx', '~> 0.7', '>=0.7.0')
+  s.add_runtime_dependency('rowx', '~> 0.7', '>=0.7.3')
   s.add_runtime_dependency('subunit', '~> 0.7', '>=0.7.0')
   s.add_runtime_dependency('geozone', '~> 0.1', '>=0.1.0')  
-  s.add_runtime_dependency('rxfhelper', '~> 1.1', '>=1.1.1')
+  s.add_runtime_dependency('rxfhelper', '~> 1.1', '>=1.1.3')
   s.add_runtime_dependency('chronic_cron', '~> 0.6', '>=0.6.0')
   s.signing_key = '../privatekeys/ruby-macrodroid.pem'
   s.cert_chain  = ['gem-public_cert.pem']
