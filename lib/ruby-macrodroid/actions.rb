@@ -143,17 +143,32 @@ end
 #
 class OpenWebPageAction < ApplicationAction
 
-  def initialize(obj={})
+  def initialize(obj={}, macro=nil)
     
     h = if obj.is_a? Hash then
-      obj
-    elsif obj.is_a? Array
-      e, macro = obj
-      txt = e.text('item/description')
-      {url: (txt || e.text)}
-    end    
     
-    h[:url_to_open] = h[:url] if h[:url]
+      obj
+      
+    elsif obj.is_a? Array
+      puts 'obj: ' + obj.inspect if @debug
+      e, macro = obj
+      
+      a = e.xpath('item/*')
+
+      h2 = if a.any? then
+        a.map {|node| [node.name.to_sym, node.text.to_s]}.to_h
+      else
+        txt = e.text('item/description')
+        {url: (txt || e.text)}
+      end      
+      
+      h2.merge(macro: macro)
+
+    end
+
+    puts 'h:' + h.inspect if @debug
+    
+    h[:url_to_open] = h[:url] if h[:url] and h[:url].length > 1
 
     options = {
       variable_to_save_response: {:m_stringValue=>"", :m_name=>"", 
@@ -165,18 +180,33 @@ class OpenWebPageAction < ApplicationAction
       block_next_action: false
     }
     
-    if h[:macro].remote_url.nil? then
+    if h[:macro].remote_url.nil? and (h[:url_to_open].nil? or 
+                                      h[:url_to_open].empty?) then
       raise OpenWebPageActionError, 'remote_url not found'
     end
     
     if (h[:identifier].nil? or h[:identifier].empty?) and 
         (h[:url_to_open].nil? or h[:url_to_open].empty?) then
+      
       h[:url_to_open] = h[:macro].remote_url.sub(/\/$/,'') + '/' + 
           h[:macro].title.downcase.gsub(/ +/,'-')
-    end
+      
+    elsif h2 and h[:macro].remote_url and h[:identifier]
+      
+      url = "%s/%s" % [h[:macro].remote_url.sub(/\/$/,''), h[:identifier]]
+      h2.delete :identifier
+      url += '?' + \
+            URI.escape(h2.map {|key,value| "%s=%s" % [key, value]}.join('&'))      
+      h[:url_to_open] = url
+      
+    end        
     
     super(options.merge h)
 
+  end
+  
+  def invoke()
+    super(url: @h[:url_to_open])
   end
   
   def to_s(colour: false, indent: 0)
@@ -355,9 +385,10 @@ class IfConditionAction < Action
       h2 = options.merge(filter(options,h).merge(macro: macro))
       super(h2)      
       
-    elsif obj.is_a? Rexle::Element
+    elsif obj.is_a? Array
+      e, macro = obj
       super() 
-      raw_txt = obj.text('item/description') || obj.text.to_s
+      raw_txt = e.text('item/description') || e.text.to_s
       puts 'raw_txt: ' + raw_txt.inspect if $debug
       
       clause = raw_txt[/^if (.*)/i,1]
@@ -391,7 +422,7 @@ class IfConditionAction < Action
   def to_s(colour: false, indent: 0)
     
     h = @h.clone    
-    h.delete :macro
+    #h.delete :macro
     @s = 'If '
     operator = @h[:is_or_condition] ? 'OR' : 'AND'
     constraints = @constraints.map \
@@ -471,6 +502,8 @@ class EndIfAction < Action
       obj
     elsif obj.is_a? Rexle::Element    
       {}
+    else
+      {}
     end
     
   
@@ -478,7 +511,7 @@ class EndIfAction < Action
       constraint_list: []
     }
 
-    super(options.merge h)
+    super()
 
   end  
   
@@ -723,9 +756,10 @@ class SayTimeAction < DateTimeAction
   end
   
   def invoke()
-    time = ($env and $env[:time]) ? $env[:time] : Time.now
+    #time = ($env and $env[:time]) ? $env[:time] : Time.now
+    time = Time.now
     tformat = @h['12_hour'] ? "%-I:%M%P" : "%H:%M"
-    super(time.strftime(tformat))
+    super(txt: time.strftime(tformat))
   end
   
   def to_pc()
@@ -814,10 +848,18 @@ end
 #
 class SpeakTextAction < DeviceAction
 
-  def initialize(h={})
-
+  def initialize(obj=nil)
+    
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      txt = e.text('item/description')
+      {text: (txt || e.text)}
+    end     
+  
     options = {
-      text_to_say: '',
+      text_to_say: h[:text] || '',
       queue: false,
       read_numbers_individually: false,
       specify_audio_stream: false,
@@ -831,8 +873,13 @@ class SpeakTextAction < DeviceAction
 
   end
   
+  def invoke()
+    super(text: @h[:text_to_say])
+  end  
+  
   def to_s(colour: false, indent: 0)
-    "Speak Text (%s)" % @h[:text_to_say]
+    @s = "Speak Text (%s)" % @h[:text_to_say]
+    super()
   end
 
 end
@@ -983,6 +1030,9 @@ class CameraFlashLightAction < DeviceSettingsAction
 
     super(options.merge h)
 
+  end
+  def invoke()
+    super(state: @h[:state])
   end
 
   def to_pc()

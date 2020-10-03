@@ -1393,8 +1393,21 @@ end
 #
 class ProximityTrigger < SensorsTrigger
 
-  def initialize(h={})
+  def initialize(obj=nil)
 
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      txt = e.text('item/description')
+      {option: (txt || e.text), macro: macro}
+    end 
+    
+    options = {
+      near: true,
+      selected_option: 0
+    }
+    
     if h[:distance] then
       
       case h[:distance].to_sym
@@ -1403,13 +1416,12 @@ class ProximityTrigger < SensorsTrigger
       end
     end
     
-    options = {
-      near: true,
-      selected_option: 0
-    }
-
     super(options.merge h)
 
+  end
+  
+  def match?(detail={}, model=nil)
+    @h[:selected_option] == detail[:option].to_i
   end
   
   def to_s(colour: false)
