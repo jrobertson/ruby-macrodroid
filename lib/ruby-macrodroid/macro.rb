@@ -3,6 +3,10 @@
 
 # This file contains the following classes:
 #  
+#  ## Nlp classes
+#  
+#  TriggersNlp ActionsNlp ConstraintsNlp
+#     
 #  ## Macro class
 #  
 #  Macro
@@ -12,11 +16,330 @@
 VAR_TYPES = {
   String: [2, :string_value], 
   TrueClass: [0, :boolean_value], 
-  TrueClass: [0, :boolean_value],
+  FalseClass: [0, :boolean_value],
   Integer: [1, :int_value],
   Float: [3, :decimal_value]
 }
 
+class TriggersNlp
+  include AppRoutes
+
+  def initialize(macro=nil)
+
+    super()
+    params = {macro: macro}
+    triggers(params)
+
+  end
+
+  def triggers(params) 
+    
+    # e.g. at 7:30pm daily
+    get /^(?:at )?(\d+:\d+(?:[ap]m)?) daily/i do |time, days|
+      [TimerTrigger, {time: time, 
+                      days: %w(Mon Tue Wed Thu Fri Sat Sun).join(', ')}]
+    end       
+
+    get /^(?:at )?(\d+:\d+(?:[ap]m)?) (?:on )?(.*)/i do |time, days|
+      [TimerTrigger, {time: time, days: days}]
+    end
+
+    # time.is? 'at 18:30pm on Mon or Tue'
+    get /^time.is\? ['"](?:at )?(\d+:\d+(?:[ap]m)?) (?:on )?(.*)['"]/i do |time, days|      
+      [TimerTrigger, {time: time, days: days.gsub(' or ',', ')}]
+    end     
+    
+    get /^shake[ _]device\??$/i do 
+      [ShakeDeviceTrigger, {}]
+    end
+    
+    get /^Flip Device (.*)$/i do |motion|
+       facedown = motion =~ /Face Up (?:->|to) Face Down/i
+      [FlipDeviceTrigger, {face_down: facedown }]
+    end
+    
+    get /^flip_device_down\?$/i do
+      [FlipDeviceTrigger, {face_down: true }]
+    end
+
+    get /^flip_device_up\?$/i do
+      [FlipDeviceTrigger, {face_down: false }]
+    end        
+    
+    get /^Failed Login Attempt$/i do
+      [FailedLoginTrigger, {}]
+    end
+    
+    get /^failed_login?$/i do
+      [FailedLoginTrigger, {}]
+    end         
+
+    get /^Geofence (Entry|Exit) \(([^\)]+)/i do |direction, name|
+      enter_area = direction.downcase.to_sym == :entry
+      [GeofenceTrigger, {name: name, enter_area: enter_area}]
+    end     
+    
+    get /^location (entered|exited) \(([^\)]+)/i do |direction, name|
+      enter_area = direction.downcase.to_sym == :entered
+      [GeofenceTrigger, {name: name, enter_area: enter_area}]
+    end
+    
+    # eg. Proximity Sensor (Near)
+    #
+    get /^Proximity Sensor \(([^\)]+)\)/i do |distance|
+      
+      [ProximityTrigger, {distance: distance}]
+    end    
+    
+    # eg. Proximity near
+    #
+    get /^Proximity (near|far|slow wave|fast wave)/i do |distance|
+      
+      [ProximityTrigger, {distance: distance}]
+    end       
+    
+    get /^WebHook \(Url\)/i do       
+      [WebHookTrigger, params]
+    end      
+
+    get /^WebHook/i do       
+      [WebHookTrigger, params]
+    end
+    
+    get /^wh/i do       
+      [WebHookTrigger, params]
+    end          
+
+    #  MacroDroid specific ---------------------------------------------------------------
+
+    get /^EmptyTrigger$/i do       
+      [EmptyTrigger, params]
+    end          
+    
+  end
+
+  alias find_trigger run_route
+
+  def to_s(colour: false)
+    'TriggersNlp ' + @h.inspect
+  end
+
+  alias to_summary to_s
+end
+
+class ActionsNlp
+  include AppRoutes
+
+  def initialize(macro=nil)
+
+    super()
+    params = {macro: macro}
+    actions(params)
+
+  end
+
+  def actions(params) 
+
+    # e.g. message popup: hello world!
+    get /^message popup: (.*)/i do |msg|
+      [ToastAction, {msg: msg}]
+    end
+
+    # e.g. Popup Message 'hello world!'
+    get /^Popup[ _]Message ['"]([^'"]+)/i do |msg|
+      [ToastAction, {msg: msg}]
+    end
+    
+    # e.g. Popup Message\n  hello world!
+    get /^Popup Message\n\s+(.*)/im do |msg|
+      [ToastAction, {msg: msg}]
+    end    
+            
+    # e.g. Popup Message
+    get /^Popup Message$/i do
+      [ToastAction, {}]
+    end    
+    
+    # e.g. say current time
+    get /^say current[ _]time/i do
+      [SayTimeAction, {}]
+    end    
+    
+    get /^Torch :?(.*)/i do |onoffstate|
+      state = %w(on off toggle).index onoffstate.downcase
+      [CameraFlashLightAction, {state: state}]
+    end    
+    
+    get /^Take Picture/i do
+      [TakePictureAction, {}]
+    end
+    
+    get /^take_picture/i do
+      [TakePictureAction, {}]
+    end           
+    
+    # -- DEVICE ACTIONS ------------------------------------------------------
+    
+    get /^Speak text \(([^\)]+)\)/i do |text|
+      [SpeakTextAction, {text: text}]
+    end           
+    
+    get /^Speak text ['"]([^'"]+)/i do |text|
+      [SpeakTextAction, {text: text}]
+    end         
+    
+    get /^Speak text$/i do |text|
+      [SpeakTextAction, {}]
+    end     
+    
+    # e.g. Display Notification: Hi there: This is the body of the message
+    get /^Display Notification: ([^:]+): [^$]+$/i do |subject, text|
+      [NotificationAction, {subject: subject, text: text}]
+    end           
+    
+    
+    # e.g. Enable Wifi
+    get /^(Enable|Disable) Wifi$/i do |raw_state|
+      
+      state = raw_state.downcase.to_sym == :enable ? 0 : 1
+      [SetWifiAction, {state: state}]
+      
+    end    
+    
+    # e.g. Play: Altair
+    get /^Play: (.*)$/i do |name|
+
+      [PlaySoundAction, {file_path: name}]
+      
+    end     
+    
+    # e.g. Launch Settings
+    get /^Launch (.*)$/i do |application|
+
+      h = {
+        application_name: application,
+        package_to_launch: 'com.android.' + application.downcase
+      }
+      [LaunchActivityAction, h]
+      
+    end
+    
+    # e.g. HTTP GET http://someurl.com/something
+    get /^HTTP GET ([^$]+)$/i do |url|
+
+      [OpenWebPageAction, url_to_open: url]
+      
+    end
+        
+    get /^HTTP GET$/i do
+
+      [OpenWebPageAction, {}]
+      
+    end    
+    
+    # e.g. webhook entered_kitchen
+    #
+    get /(?:webhook|HTTP GET) ([^$]+)$/i do |s|
+      key = s =~ /^http/ ? :url_to_open : :identifier      
+      [OpenWebPageAction, {key => s}]
+    end
+    
+    #
+    get /^WebHook \(Url\)/i do
+      [OpenWebPageAction, params]
+    end
+    
+    # e.g. webhook entered_kitchen
+    #
+    get /^webhook$/i do
+      [OpenWebPageAction, params]
+    end
+    
+    # -- Location ---------------------------------------------------------
+    
+    get /^Force Location Update$/i do
+      [ForceLocationUpdateAction, params]
+    end    
+    
+    get /^Share Location$/i do
+      [ShareLocationAction, params]
+    end    
+    
+    #a: Keep Device Awake Screen On Until Disabled
+    #
+    get /Keep Device Awake Screen On Until Disabled/i do
+      [KeepAwakeAction, {enabled: true, permanent: true, screen_option: 0}]
+    end
+    
+    
+    #a: Keep Device Awake Screen On 1h 1m 1s
+    #
+    get /Keep Device Awake Screen On ([^$]+)/i do |duration|
+      
+      a = duration.split.map(&:to_i)
+      secs = Subunit.new(units={minutes:60, hours:60, seconds: 60}, a).to_i
+      
+      h = {
+        permanent: true, screen_option: 0, seconds_to_stay_awake_for: secs
+      }
+      [KeepAwakeAction, h]
+    end
+    
+    #a: Disable Keep Awake
+    #
+    get /Disable Keep Awake/i do
+      [KeepAwakeAction, {enabled: false, screen_option: 0}]
+    end    
+
+    #e.g a: if Airplane mode enabled
+    #
+    get /if (.*)/i do
+      [IfConditionAction, {}]
+    end
+    
+    get /End If/i do
+      [EndIfAction, {}]
+    end          
+    
+    # -- MacroDroid Specific ------------------------------------------------
+    #
+    get /^Set Variable$/i do
+      [SetVariableAction, {}]
+    end        
+
+  end
+
+  alias find_action run_route
+
+
+end
+
+class ConstraintsNlp
+  include AppRoutes
+
+  def initialize()
+
+    super()
+    params = {}
+    constraints(params)
+
+  end
+
+  def constraints(params) 
+
+    get /^airplane mode (.*)/i do |state|
+      [AirplaneModeConstraint, {enabled: (state =~ /^enabled|on$/i) == 0}]
+    end
+
+  end
+
+  alias find_constraint run_route
+
+end
+
+
+class MacroError < Exception
+end
 
 class Macro
   using ColouredText
@@ -34,7 +357,7 @@ class Macro
     
     puts 'inside Macro#initialize' if @debug    
           
-    @local_variables, @triggers, @actions, @constraints = [], [], [], []
+    @local_variables, @triggers, @actions, @constraints = {}, [], [], []
     @h = {}
     
   end
@@ -61,9 +384,13 @@ class Macro
   end
 
   def to_h()
+    
+    a = @local_variables.map do |k,v|
+      varify(k,v).to_camelcase.map{|key,value| ['m_' + key, value]}.to_h
+    end
 
     h = {
-      local_variables: varify(@local_variables),
+      local_variables: a,
       m_trigger_list: @triggers.map(&:to_h),
       m_action_list: @actions.map(&:to_h),
       m_category: @category,
@@ -73,7 +400,7 @@ class Macro
       m_excludeLog: false,
       m_GUID: guid(),
       m_isOrCondition: false,
-      m_enabled: false,
+      m_enabled: true,
       m_descriptionOpen: false,
       m_headingColor: 0
     }
@@ -98,7 +425,7 @@ class Macro
     if h[:local_variables].any? and h[:local_variables].first.any? then
       
       @local_variables = h[:local_variables].map do |var|
-              
+
         val = case var[:type]
         when 0 # boolean
           var[:boolean_value]
@@ -117,7 +444,7 @@ class Macro
     
     # fetch the triggers
     @triggers = h[:trigger_list].map do |trigger|
-      puts 'trigger: ' + trigger.inspect
+      puts 'trigger: ' + trigger.inspect if @debug
       #exit      
       object(trigger.to_snake_case)
 
@@ -196,24 +523,7 @@ class Macro
       
       @title = node.text('macro') || node.attributes[:name]
       
-      @local_variables = node.xpath('variable').map do |e|
-        
-        label, v = e.text.to_s.split(/: */,2)
-        
-        value = if v.to_f.to_s == v
-          v.to_f
-        elsif v.downcase == 'true'
-          true
-        elsif v.downcase == 'false' 
-          false
-        elsif v.to_i.to_s == v
-          v.to_i
-        else
-          v
-        end
-        
-        [label, value]
-      end
+      node.xpath('variable').each {|e| set_var(*e.text.to_s.split(/: */,2)) }
       
       #@description = node.attributes[:description]      
       
@@ -245,7 +555,8 @@ class Macro
               
               r = tp.find_trigger trigger          
               puts 'r: ' + r.inspect if @debug
-              o = r[0].new([description, self]) if r              
+              #o = r[0].new([description, self]) if r
+              o = object_create(r[0], [description, self]) if r                            
               puts 'after o' if @debug
               o
               
@@ -265,7 +576,12 @@ class Macro
             end
 
             r = tp.find_trigger trigger          
-            r[0].new(h) if r
+            #r[0].new(h) if r
+            if r then
+              object_create(r[0], h)
+            else
+              raise MacroError, 'App-routes: Trigger "' + trigger + '" not found' 
+            end
             
           end
           
@@ -273,11 +589,20 @@ class Macro
           
           trigger = e.text.strip
           r = tp.find_trigger trigger
-          r[0].new(r[1]) if r
+          #r[0].new(r[1]) if r
+          
+          if r then
+            object_create(r[0],r[1])
+          else
+            raise MacroError, 'App-routes: Trigger "' + trigger + '" not found' 
+          end
           
         end
         
+        
       end
+    
+
       
       ap = ActionsNlp.new self    
       
@@ -306,7 +631,9 @@ class Macro
               
               r = ap.find_action action          
               puts 'r: ' + r.inspect if @debug
-              o = r[0].new([description, self]) if r
+              puts 'description: ' + description.xml.inspect if @debug
+              #o = r[0].new([description, self]) if r
+              o = object_create(r[0],[description, self]) if r
               puts 'after o' if @debug
               o
               
@@ -315,6 +642,7 @@ class Macro
           else
             
             action = e.text.strip
+            puts 'action: ' + action.inspect if @debug
             r = ap.find_action action
 
             a = e.xpath('item/*')
@@ -324,9 +652,11 @@ class Macro
             else
               {}
             end
+            puts 'h: ' + h.inspect if @debug
 
-            r = ap.find_action action          
-            r[0].new(h) if r
+            #r = ap.find_action action          
+            #r[0].new(h.merge(macro: self)) if r
+            object_create(r[0], h.merge(macro: self)) if r
             
           end
           
@@ -334,7 +664,8 @@ class Macro
           
           action = e.text.strip
           r = ap.find_action action          
-          r[0].new(r[1]) if r
+          #r[0].new(r[1]) if r
+          object_create(r[0],r[1]) if r
           
         end
 
@@ -347,9 +678,7 @@ class Macro
         r = cp.find_constraint e.text
         puts 'found constraint ' + r.inspect if @debug
         
-        if r then
-          r[0].new(r[1])
-        end
+        object_create(r[0], r[1]) if r
         
       end                                   
       
@@ -393,6 +722,27 @@ class Macro
   #
   def set_env()
     @triggers.each(&:set_env)
+  end
+  
+  def set_var(label, v='')
+        
+    value = if v.to_f.to_s == v
+      v.to_f
+    elsif v.downcase == 'true'
+      true
+    elsif v.downcase == 'false' 
+      false
+    elsif v.to_i.to_s == v
+      v.to_i
+    else
+      v
+    end
+
+    if not @local_variables.has_key? label.to_sym then
+      @local_variables.merge!({label.to_sym => value}) 
+    end
+
+    varify(label, value)
   end
 
   def to_pc()
@@ -441,6 +791,7 @@ EOF
     a << @triggers.map do |x|
       
       puts 'x: ' + x.inspect if @debug
+      raise 'Macro#to_s trigger cannot be nil' if x.nil?
       
       s =-x.to_s(colour: colour)
       puts 's: ' + s.inspect if @debug
@@ -587,43 +938,47 @@ EOF
 
     puts ('inside object h:'  + h.inspect).debug if @debug  
     klass = Object.const_get h[:class_type]
-    puts klass.inspect.highlight if $debug
+    puts klass.inspect.highlight if @debug
     
     if klass == GeofenceTrigger then
-      puts 'GeofenceTrigger found'.highlight if $debug
+      puts 'GeofenceTrigger found'.highlight if @debug
       GeofenceTrigger.new(h, geofences: @geofences)
     else
-      puts 'before klass'
+      puts 'before klass' if @debug
       h2 = h.merge( macro: self)
-      puts 'h2: ' + h2.inspect      
+      puts 'h2: ' + h2.inspect if @debug      
       r = klass.new h2 
-      puts 'r:' + r.inspect
+      puts 'r:' + r.inspect if @debug
       r
       
     end
     
   end
   
-  def varify(local_variables)
-    
-        
-    local_variables.map do |key, value|
-            
-      puts 'value ' + value.class.to_s.to_sym.inspect
-      puts 'VAR_TYPES: ' + VAR_TYPES.inspect
-      type = VAR_TYPES[value.class.to_s.to_sym]
-      puts 'type: ' + type.inspect
-      h = {
-        boolean_value: false,
-        decimal_value: 0.0,
-        int_value: 0,
-        name: key,
-        string_value: '',
-        type: type[0]
-      }
-      h[type[1]] = value
-      h
+  def object_create(klass, *args)
+
+    begin
+      klass.new(*args)
+    rescue
+      raise MacroError, klass.to_s + ': ' + ($!).to_s
     end
+  end
+  
+  def varify(label, value='')
+                        
+
+    type = VAR_TYPES[value.class.to_s.to_sym]
+
+    h = {
+      boolean_value: false,
+      decimal_value: 0.0,
+      int_value: 0,
+      name: label,
+      string_value: '',
+      type: type[0]
+    }
+    h[type[1]] = value
+    h
     
   end
 

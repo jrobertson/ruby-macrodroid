@@ -421,27 +421,33 @@ class WebHookTrigger < Trigger
     h = if obj.is_a? Hash then
       obj
     elsif obj.is_a? Array
+      
       e, macro = obj
       txt = e.text('item/description')
-      {url: (txt || e.text), macro: macro}
+      
+      h2 = if txt then
+        {url: (txt || e.text)}
+      else                
+        a = e.xpath('item/*')
+        a.map {|node| [node.name.to_sym, node.text.to_s]}.to_h        
+      end      
+      
+      h2.merge(macro: macro)
     end        
     
     if h[:url] then
-      h[:identifier] = h[:url][/https:\/\/trigger.macrodroid.com\/(?:\w+\-){4}\w+\/([^$]+)/,1]
+      h[:identifier] = h[:url]\
+          [/https:\/\/trigger.macrodroid.com\/(?:\w+\-){4}\w+\/([^$]+)/,1]
+    elsif h[:identifier].nil? or h[:identifier].empty? then
+      h[:identifier] = h[:macro].title.downcase.gsub(/ +/,'-')
     end
-
 
     options = {
       identifier: ''
     }
     
     @deviceid = h[:macro].deviceid
-
-    
-    if h[:identifier].nil? or h[:identifier].empty? then
-      h[:identifier] = h[:macro].title.downcase.gsub(/ +/,'-')
-    end
-    
+        
     super(options.merge filter(options,h))
     @list << 'identifier'
 

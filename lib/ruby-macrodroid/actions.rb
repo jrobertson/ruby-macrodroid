@@ -145,12 +145,15 @@ class OpenWebPageAction < ApplicationAction
 
   def initialize(obj={}, macro=nil)
     
+   # puts 'obj: ' + obj[0].xml.inspect
+    
     h = if obj.is_a? Hash then
     
       obj
       
     elsif obj.is_a? Array
-      puts 'obj: ' + obj.inspect if @debug
+      
+      puts 'obj: ' + obj.inspect if $debug
       e, macro = obj
       
       a = e.xpath('item/*')
@@ -166,41 +169,54 @@ class OpenWebPageAction < ApplicationAction
 
     end
 
-    puts 'h:' + h.inspect if @debug
+    puts 'h:' + h.inspect if $debug
     
-    h[:url_to_open] = h[:url] if h[:url] and h[:url].length > 1
+    #h[:url_to_open] = h[:url] if h[:url] and h[:url].length > 1
 
     options = {
-      variable_to_save_response: {:m_stringValue=>"", :m_name=>"", 
-      m_decimalValue: 0.0, isLocal: true, m_booleanValue: false, 
-      excludeFromLog: false, m_intValue: 0, m_type: 2},
+      variable_to_save_response: {:string_value=>"", :name=>"coords", 
+      decimal_value: 0.0, isLocal: true, m_boolean_value: false, 
+      excludeFromLog: false, int_value: 0, type: 2},
       url_to_open: '',
       http_get: true,
       disable_url_encode: false,
       block_next_action: false
     }
     
-    if h[:macro].remote_url.nil? and (h[:url_to_open].nil? or 
-                                      h[:url_to_open].empty?) then
+    return super(options.merge h) if h[:url_to_open]
+    
+    if h[:macro].remote_url.nil? and (h[:url].nil? or h[:url].empty?) then
       raise OpenWebPageActionError, 'remote_url not found'
     end
     
-    if (h[:identifier].nil? or h[:identifier].empty?) and 
-        (h[:url_to_open].nil? or h[:url_to_open].empty?) then
-      
-      h[:url_to_open] = h[:macro].remote_url.sub(/\/$/,'') + '/' + 
-          h[:macro].title.downcase.gsub(/ +/,'-')
-      
+    url = if h[:url] and h[:url].length > 1 then
+    
+      h[:url]      
+
     elsif h2 and h[:macro].remote_url and h[:identifier]
       
-      url = "%s/%s" % [h[:macro].remote_url.sub(/\/$/,''), h[:identifier]]
-      h2.delete :identifier
-      url += '?' + \
-            URI.escape(h2.map {|key,value| "%s=%s" % [key, value]}.join('&'))      
-      h[:url_to_open] = url
+      "%s/%s" % [h[:macro].remote_url.sub(/\/$/,''), h[:identifier]]
+      
+    elsif (h[:identifier].nil? or h[:identifier].empty?)         
+      
+      h[:url_to_open] = h[:macro].remote_url.sub(/\/$/,'') + '/' + 
+          h[:macro].title.downcase.gsub(/ +/,'-')            
       
     end        
     
+    if h2 then
+      
+      h2.delete :identifier
+      h2.delete :url
+      
+      if h2.any? then
+        url += '?' + \
+            URI.escape(h2.map {|key,value| "%s=%s" % [key, value]}.join('&'))
+      end
+      
+    end
+    
+    h[:url_to_open] = url    
     super(options.merge h)
 
   end
@@ -1338,7 +1354,7 @@ class ForceLocationUpdateAction < LocationAction
   end
 
   def to_s(colour: false, indent: 0)
-    'ForceLocationUpdateAction ' + @h.inspect
+    'Force Location Update' #+ @h.inspect
   end
 
   alias to_summary to_s
@@ -1359,26 +1375,34 @@ end
 #
 class ShareLocationAction < LocationAction
 
-  def initialize(h={})
+  def initialize(obj=nil)
     
-    super()
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      {variable: macro.set_var(e.text('item/description').to_s)}
+
+    end      
+    
+    #super()
 
     options = {
       email: '',
-      variable: {:m_stringValue=>"", :m_name=>"", 
-                 :m_decimalValue=>0.0, :isLocal=>true, :m_booleanValue=>false, 
-                 :excludeFromLog=>false, :m_intValue=>0, :m_type=>2},
+      variable: {:string_value=>"", :name=>"", 
+                 :decimal_value=>0.0, :is_local=>true, :boolean_value=>false, 
+                 :exclude_from_log=>false, :int_value=>0, :type=>2},
       sim_id: 0,
       output_channel: 5,
       old_variable_format: true
     }
-
+    #options[:variable].merge! h
     super(options.merge h)
 
   end
 
   def to_s(colour: false, indent: 0)
-    @s = 'Share Location' + "\nGPS" # + @h.inspect
+    @s = 'Share Location' + "\n" + @h[:variable][:name] # + @h.inspect
     super()
   end
 
@@ -1573,7 +1597,15 @@ end
 #
 class SetVariableAction < Action
   
-  def initialize(h={})
+  def initialize(obj=nil)
+    
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      node = e.element('item/*')
+      macro.set_var node.name, node.value.to_s
+    end    
     
     options = {
       :user_prompt=>true, 
@@ -1581,9 +1613,21 @@ class SetVariableAction < Action
       :user_prompt_show_cancel=>true, 
       :user_prompt_stop_after_cancel=>true, 
       :user_prompt_title=>"Word reverse",
-      :name => 'word'
+      :name => 'word',
+      :false_label=>"False", :int_expression=>false, :int_random=>false, 
+      :int_random_max=>0, :int_random_min=>0, :int_value_decrement=>false, 
+      :int_value_increment=>false, :new_boolean_value=>false, 
+      :new_double_value=>0.0, :new_int_value=>0, 
+      :new_string_value=>"[battery]", :true_label=>"True", 
+      :user_prompt=>false, :user_prompt_show_cancel=>true, 
+      :user_prompt_stop_after_cancel=>true, 
+      :variable=>{
+                  :exclude_from_log=>false, :is_local=>true, 
+                  :boolean_value=>false, :decimal_value=>0.0, 
+                  :int_value=>0, :name=>"foo", :string_value=>"52", :type=>2
+      }
     }
-    super(h)
+    super(options.merge h)
     
   end  
   

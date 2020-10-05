@@ -34,19 +34,7 @@ class MacroObject
 
   def to_h()
 
-    h = @h
-
-    h2 = h.inject({}) do |r,x|
-      puts 'x: ' + x.inspect if @debug
-      key, value = x
-      puts 'key: ' + key.inspect if @debug
-      new_key = key.to_s.gsub(/\w_\w/){|x| x[0] + x[-1].upcase}
-      new_key = new_key.prepend 'm_' unless @list.include? new_key
-      new_key = 'm_SIGUID' if new_key == 'm_siguid'
-      r.merge(new_key => value)
-    end
-    
-    h2.merge('m_classType' => self.class.to_s)
+    hashify(@h)
 
   end
   
@@ -98,13 +86,31 @@ class MacroObject
   
   def object(h={})
 
-    puts ('inside object h:'  + h.inspect).debug if @debug
+    puts ('inside object h:'  + h.inspect).debug if $debug
     klass = Object.const_get h[:class_type]
     puts klass.inspect.highlight if $debug
     
     klass.new h
     
-  end    
+  end
+  
+  private
+  
+  def hashify(h)
+    
+    h2 = h.inject({}) do |r,x|
+      puts 'x: ' + x.inspect if $debug
+      key, value = x
+      puts 'key: ' + key.inspect if $debug
+      new_key = key.to_s.gsub(/\w_\w/){|x| x[0] + x[-1].upcase}
+      new_key = new_key.prepend 'm_' unless @list.include? new_key
+      new_key = 'm_SIGUID' if new_key == 'm_siguid'
+      new_val = value.is_a?(Hash) ? hashify(value) : value
+      r.merge(new_key => new_val)
+    end
+    
+    h2.merge('m_classType' => self.class.to_s)    
+  end
   
 end
 

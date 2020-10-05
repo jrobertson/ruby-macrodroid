@@ -38,6 +38,7 @@ require 'rxfhelper'
 require 'chronic_cron'
 
 
+
 MODEL =<<EOF
 device
   connectivity
@@ -73,16 +74,16 @@ module Params
     end
 
     # turns keys from snake_case to CamelCase
-    def to_camel_case(h=self)
+    def to_camelcase(h=self)
       
       h.inject({}) do |r,x|
                 
         key, value = x   
         
         val = if value.is_a?(Hash) then
-          to_camel_case(value)
+          to_camelcase(value)
         elsif value.is_a?(Array) and value.first.is_a? Hash
-          value.map {|row| to_camel_case(row)}
+          value.map {|row| to_camelcase(row)}
         else
           value          
         end
@@ -165,7 +166,7 @@ class MacroDroid
             
           end
           
-          xml = RowX.new(raw_macros).to_xml
+          xml = RowX.new(raw_macros, allow_lonely_keyfield: true).to_xml
           puts 'xml: ' + xml if @debug
           import_rowxml(xml)
           
@@ -240,7 +241,7 @@ class MacroDroid
       },
       macro_list:  @macros.map(&:to_h)
     }
-    @h.merge(h).to_camel_case
+    @h.merge(h).to_camelcase
 
   end
   
