@@ -38,6 +38,7 @@ require 'rxfhelper'
 require 'chronic_cron'
 
 
+# PASTE_START
 
 MODEL =<<EOF
 device
@@ -145,8 +146,9 @@ class MacroDroid
           puts 'before RowX.new' if @debug
 
           s2 = s.gsub(/^g:/,'geofence:').gsub(/^m:/,'macro:')\
-              .gsub(/^v:/,'variable:').gsub(/^t:/,'trigger:')\
-              .gsub(/^a:/,'action:').gsub(/^c:/,'constraint:').gsub(/^#.*/,'')
+              .gsub(/^d:/,'description:').gsub(/^v:/,'variable:')\
+              .gsub(/^t:/,'trigger:').gsub(/^a:/,'action:')\
+              .gsub(/^c:/,'constraint:').gsub(/^#.*/,'')
           
           a = s2.split(/(?=^macro:)/)
           
@@ -577,6 +579,7 @@ class DroidSim
 
 end
 
+# PASTE_END
 
 require 'ruby-macrodroid/base'
 require 'ruby-macrodroid/triggers'

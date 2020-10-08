@@ -1066,7 +1066,17 @@ end
 class VibrateAction < DeviceSettingsAction
 
   def initialize(h={})
-
+    
+    pattern = [
+      'Blip', 'Short Buzz', 'Long Buzz', 'Rapid', 'Slow', 'Increasing', 
+      'Constant', 'Decreasing', 'Final Fantasy', 'Game Over', 'Star Wars',
+      'Mini Blip', 'Micro Blip'
+    ]    
+    
+    if h[:pattern] then
+      h[:vibrate_pattern] = pattern.map(&:downcase).index h[:pattern]
+    end
+    
     options = {
       vibrate_pattern: 1
     }
@@ -2381,8 +2391,46 @@ end
 #   disable keep awake    => enabled: false
 #
 class KeepAwakeAction < ScreenAction
+  using ColouredText
 
-  def initialize(h={})
+  def initialize(obj=nil)
+    
+    
+    h = if obj.is_a? Hash then
+    
+      obj
+      
+    elsif obj.is_a? Array
+      
+      puts 'obj: ' + obj.inspect if $debug
+      e, macro = obj
+      
+      a = e.xpath('item/*')
+
+      txt = e.text('item/description')      
+      
+      h2 = if txt then
+      
+        raw_duration = (txt || e.text).to_s
+        puts 'raw_duration: ' + raw_duration.inspect 
+        duration = raw_duration[/Screen On - ([^$]+)/i]
+        {duration: duration}
+        
+      elsif a.any? then
+        a.map {|node| [node.name.to_sym, node.text.to_s]}.to_h
+      end      
+      
+      h2.merge(macro: macro)
+
+    end
+    
+    puts ('h: ' + h.inspect).debug #if $debug
+    
+    if h[:duration] then
+            
+      h[:seconds_to_stay_awake_for] =  Subunit.hms_to_seconds(h[:duration])
+      
+    end
 
     options = {
       enabled: true,

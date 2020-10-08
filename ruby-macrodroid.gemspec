@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'ruby-macrodroid'
-  s.version = '0.9.2'
+  s.version = '0.9.3'
   s.summary = 'A macro builder for MacroDroid. #unofficialgem #experimental'
   s.authors = ['James Robertson']
   s.files = Dir[

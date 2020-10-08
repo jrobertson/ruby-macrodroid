@@ -192,6 +192,10 @@ class ActionsNlp
       [SpeakTextAction, {}]
     end     
     
+    get /^Vibrate \(([^\)]+)/i do |pattern|
+      [VibrateAction, {pattern: pattern}]
+    end     
+    
     # e.g. Display Notification: Hi there: This is the body of the message
     get /^Display Notification: ([^:]+): [^$]+$/i do |subject, text|
       [NotificationAction, {subject: subject, text: text}]
@@ -285,6 +289,10 @@ class ActionsNlp
       [KeepAwakeAction, h]
     end
     
+    get /Keep Device Awake$/i do
+      [KeepAwakeAction, params]
+    end    
+    
     #a: Disable Keep Awake
     #
     get /Disable Keep Awake/i do
@@ -326,10 +334,44 @@ class ConstraintsNlp
   end
 
   def constraints(params) 
+    
+    # Device State        
+    
+    get /^Device (locked|unlocked)/i do |state|
+      [DeviceLockedConstraint, {locked: state.downcase == 'locked'}]
+    end
 
     get /^airplane mode (.*)/i do |state|
       [AirplaneModeConstraint, {enabled: (state =~ /^enabled|on$/i) == 0}]
     end
+    
+    # 
+    
+    # -- Sensors -----------------------------------
+    #
+    get /^Light Sensor (Less|Greater) than (50.0)lx/i do |operator, val|
+
+      level, option = operator.downcase == 'less' ? [-1,0] : [1,1]
+      
+      h = {
+        light_level: level,
+        light_level_float: val,
+        option: option
+      }
+      
+      [LightLevelConstraint, h]
+    end
+    
+    get /^Proximity Sensor: (Near|Far)/i do |distance|      
+      [ProximitySensorConstraint, {near: distance.downcase == 'near'}]
+    end
+    
+    
+    # -- Screen and Speaker ---------------------------
+    #
+    get /^Screen (On|Off)/i do |state|      
+      [ScreenOnOffConstraint, {screen_on: state.downcase == 'on'}]
+    end    
 
   end
 
@@ -522,6 +564,21 @@ class Macro
       puts 'import_xml: inside level 1' if @debug
       
       @title = node.text('macro') || node.attributes[:name]
+      
+      d = node.element('description')
+      
+      if d then
+        
+        desc = []
+        desc << d.text.strip
+        
+        if d.element('item/description') then
+          desc <<  d.text('item/description').strip
+        end
+        
+        @description = desc.join("\n")
+
+      end
       
       node.xpath('variable').each {|e| set_var(*e.text.to_s.split(/: */,2)) }
       
