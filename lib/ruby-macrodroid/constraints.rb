@@ -794,6 +794,13 @@ class MacroDroidVariableConstraint < Constraint
 
   def initialize(h={})
 
+    if h[:loperand] then
+      h[:variable] = {}
+      h[:variable][:name] = h[:loperand]
+      h[:variable][:type] = 2
+      h[:string_value] = h[:roperand]
+    end
+        
     options = {
       
       :enable_regex=>false, 
@@ -825,11 +832,24 @@ class MacroDroidVariableConstraint < Constraint
 
   def to_s(colour: false, indent: 0)
     
-      a = [:int_greater_than, :int_less_than, :int_not_equal, 
-                :string_equal].zip(['>','<','!=', '='])
-      operator = a.find {|label,_| @h[label]}.last
+    a = [:int_greater_than, :int_less_than, :int_not_equal, 
+              :string_equal].zip(['>','<','!=', '='])
+    operator = a.find {|label,_| @h[label]}.last
     
-    @s = "%s %s %s" % [@h[:variable][:name], operator, @h[:int_value]]
+    var = @h[:variable]
+    
+    type = case var[:type]
+    when 0 # boolean
+      :boolean_value
+    when 1 # integer
+      :int_value
+    when 2 # string
+      :string_value
+    when 3 # decimal
+      :decimal_Value
+    end  
+    
+    @s = "%s %s %s" % [@h[:variable][:name], operator, @h[type]]
     super()
   end
 

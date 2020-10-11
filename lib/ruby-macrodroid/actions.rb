@@ -34,6 +34,7 @@
 
 class Action < MacroObject
   using Params
+  include ObjectX
   
   attr_reader :constraints  
 
@@ -393,6 +394,7 @@ class IfConditionAction < Action
       a: true,
       constraint_list: []
     }  
+    puts 'obj: ' + obj.inspect #if $debug
     
     if obj.is_a? Hash then
       
@@ -402,13 +404,18 @@ class IfConditionAction < Action
       super(h2)      
       
     elsif obj.is_a? Array
-      e, macro = obj
-      super() 
-      raw_txt = e.text('item/description') || e.text.to_s
-      puts 'raw_txt: ' + raw_txt.inspect if $debug
       
-      clause = raw_txt[/^if (.*)/i,1]
+      e, macro = obj
+      super()
+      puts 'e.xml: ' + e.xml
+      puts 'e.text: ' + e.text.to_s.strip
+      raw_txt = e.text.to_s.strip[/^if [^$]+/i] || e.text('item/description')
+      puts 'raw_txt: ' + raw_txt.inspect #if $debug
+      
+      clause = raw_txt[/^If (.*)/i,1]
+      puts 'clause: ' + clause.inspect
       conditions = clause.split(/\s+\b(?:AND|OR)\b\s+/i)
+      puts 'conditions: ' + conditions.inspect
       
       cp = ConstraintsNlp.new      
       
@@ -421,6 +428,19 @@ class IfConditionAction < Action
         
       end         
       puts '@constraints: ' + @constraints.inspect if $debug
+      
+      # find any nested actions
+      item = e.element('item')
+      
+      if item then
+        
+        ap = ActionsNlp.new
+        obj2 = action_to_object(ap, item, item, macro)      
+        puts 'obj2: ' + obj2.inspect
+        #macro.add obj2
+        
+      end
+  
       {}
     else
       # get the constraints
@@ -450,7 +470,8 @@ class IfConditionAction < Action
     out << s + constraints
     out.join("\n")
     
-  end  
+  end 
+  
 end
 
 class ElseAction < Action
