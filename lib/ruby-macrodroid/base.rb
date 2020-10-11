@@ -11,7 +11,7 @@ module ObjectX
   
   def action_to_object(ap, e, item, macro)
     
-    debug = true
+    debug = $debug
     
     puts 'inside action_to_object: item.xml: ' + item.xml if debug
         
@@ -46,7 +46,7 @@ module ObjectX
     else
       
       action = e.text.strip
-      puts 'action: ' + action.inspect if @debug
+      puts 'action: ' + action.inspect if $debug
       r = ap.find_action action
 
       a = e.xpath('item/*')
@@ -56,7 +56,7 @@ module ObjectX
       else
         {}
       end
-      puts 'h: ' + h.inspect if @debug
+      puts 'h: ' + h.inspect if $debug
 
       #r = ap.find_action action          
       #r[0].new(h.merge(macro: self)) if r

@@ -33,6 +33,7 @@
 
 
 class Action < MacroObject
+  using ColouredText
   using Params
   include ObjectX
   
@@ -160,7 +161,17 @@ class OpenWebPageAction < ApplicationAction
       a = e.xpath('item/*')
 
       h2 = if a.any? then
-        a.map {|node| [node.name.to_sym, node.text.to_s]}.to_h
+      
+        a.map do |node|
+          
+          if node.name == 'description' and node.text.to_s =~ /: / then
+            node.text.to_s.split(/: +/,2).map(&:strip)
+          else
+            [node.name.to_sym, node.text.to_s.strip]
+          end
+          
+        end.to_h
+        
       else
         txt = e.text('item/description')
         {url: (txt || e.text)}
@@ -394,7 +405,7 @@ class IfConditionAction < Action
       a: true,
       constraint_list: []
     }  
-    puts 'obj: ' + obj.inspect #if $debug
+    puts 'obj: ' + obj.inspect if $debug
     
     if obj.is_a? Hash then
       
@@ -407,20 +418,20 @@ class IfConditionAction < Action
       
       e, macro = obj
       super()
-      puts 'e.xml: ' + e.xml
-      puts 'e.text: ' + e.text.to_s.strip
+      puts 'e.xml: ' + e.xml if $debug
+      puts 'e.text: ' + e.text.to_s.strip if $debug
       raw_txt = e.text.to_s.strip[/^if [^$]+/i] || e.text('item/description')
-      puts 'raw_txt: ' + raw_txt.inspect #if $debug
+      puts 'raw_txt: ' + raw_txt.inspect if $debug
       
       clause = raw_txt[/^If (.*)/i,1]
-      puts 'clause: ' + clause.inspect
+      puts 'clause: ' + clause.inspect if $debug
       conditions = clause.split(/\s+\b(?:AND|OR)\b\s+/i)
-      puts 'conditions: ' + conditions.inspect
+      puts 'conditions: ' + conditions.inspect if $debug
       
       cp = ConstraintsNlp.new      
       
       @constraints = conditions.map do |c|
-        puts 'c: ' + c.inspect 
+        puts 'c: ' + c.inspect  if $debug
         r = cp.find_constraint c
         puts 'found constraint ' + r.inspect if $debug
         
@@ -436,7 +447,7 @@ class IfConditionAction < Action
         
         ap = ActionsNlp.new
         obj2 = action_to_object(ap, item, item, macro)      
-        puts 'obj2: ' + obj2.inspect
+        puts 'obj2: ' + obj2.inspect if $debug
         #macro.add obj2
         
       end
@@ -1627,6 +1638,7 @@ end
 # MacroDroid Specific
 #
 class SetVariableAction < Action
+  using ColouredText
   
   def initialize(obj=nil)
     
@@ -1635,7 +1647,14 @@ class SetVariableAction < Action
     elsif obj.is_a? Array
       e, macro = obj
       node = e.element('item/*')
-      macro.set_var node.name, node.value.to_s
+      #puts ("node.name: %s node.value: %s" % [node.name, node.value]).debug
+      r = macro.set_var node.name, node.value.to_s
+      puts ('r: ' + r.inspect).debug if $debug
+      r
+      if r[:type] == 2 then
+        { variable: {name: r[:name], type: r[:type]}, new_string_value: r[:string_value]
+          }
+      end
     end    
     
     options = {
@@ -2433,7 +2452,7 @@ class KeepAwakeAction < ScreenAction
       h2 = if txt then
       
         raw_duration = (txt || e.text).to_s
-        puts 'raw_duration: ' + raw_duration.inspect 
+        puts 'raw_duration: ' + raw_duration.inspect  if $debug
         duration = raw_duration[/Screen On - ([^$]+)/i]
         {duration: duration}
         
@@ -2445,7 +2464,7 @@ class KeepAwakeAction < ScreenAction
 
     end
     
-    puts ('h: ' + h.inspect).debug #if $debug
+    puts ('h: ' + h.inspect).debug if $debug
     
     if h[:duration] then
             

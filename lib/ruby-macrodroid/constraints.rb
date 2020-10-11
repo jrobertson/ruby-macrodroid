@@ -908,7 +908,7 @@ class TriggerThatInvokedConstraint < Constraint
   
   def initialize(h={})
 
-    puts ('h: ' + h.inspect).green
+    puts ('h: ' + h.inspect).green if $debug
     @trigger = h[:macro].triggers.find {|x| x.siguid == h[:si_guid_that_invoked] }
     
     options = {

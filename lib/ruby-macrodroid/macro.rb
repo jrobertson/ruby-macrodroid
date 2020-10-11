@@ -198,6 +198,10 @@ class ActionsNlp
       [VibrateAction, {pattern: pattern}]
     end     
     
+    get /^Vibrate$/i do |pattern|
+      [VibrateAction, {pattern: 'short buzz'}]
+    end       
+    
     # e.g. Display Notification: Hi there: This is the body of the message
     get /^Display Notification: ([^:]+): [^$]+$/i do |subject, text|
       [NotificationAction, {subject: subject, text: text}]
@@ -422,8 +426,8 @@ class Macro
   end
   
   def add(obj)
-    puts 'inside add; ' + obj.inspect
-    puts '@actions: ' + @actions.inspect
+    puts 'inside add; ' + obj.inspect if @debug
+    puts '@actions: ' + @actions.inspect if @debug
 
     if obj.kind_of? Trigger then
       
@@ -774,7 +778,10 @@ class Macro
     if not @local_variables.has_key? label.to_sym then
       @local_variables.merge!({label.to_sym => value}) 
     end
-
+    
+    if @debug then
+      puts ("before varify; label: %s value: %s" % [label, value]).debug
+    end
     varify(label, value)
   end
 
