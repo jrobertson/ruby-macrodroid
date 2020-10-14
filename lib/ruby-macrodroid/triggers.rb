@@ -244,7 +244,7 @@ class ExternalPowerTrigger < Trigger
     
     return 'Power Disconnected' unless @h[:power_connected]
     
-    status = 'Power Connectd'
+    status = 'Power Connected'
     options = if @h[:power_connected_options].all? then
       'Any'
     else

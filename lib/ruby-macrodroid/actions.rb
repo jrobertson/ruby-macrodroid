@@ -143,19 +143,23 @@ end
 
 # Category: Applications
 #
+
+
 class OpenWebPageAction < ApplicationAction
+  using ColouredText
 
   def initialize(obj={}, macro=nil)
-    
-   # puts 'obj: ' + obj[0].xml.inspect
+
+    $debug = true    
+    puts ('obj: ' + obj.inspect).debug if $debug
     
     h = if obj.is_a? Hash then
     
-      obj
+      obj.merge({macro: macro})
       
     elsif obj.is_a? Array
       
-      puts 'obj: ' + obj.inspect if $debug
+      puts ('obj: ' + obj.inspect).debug if $debug
       e, macro = obj
       
       a = e.xpath('item/*')
@@ -181,7 +185,7 @@ class OpenWebPageAction < ApplicationAction
 
     end
 
-    puts 'h:' + h.inspect if $debug
+    puts ('h:' + h.inspect).debug if $debug
     
     #h[:url_to_open] = h[:url] if h[:url] and h[:url].length > 1
 
@@ -451,8 +455,12 @@ class IfConditionAction < Action
         #macro.add obj2
         
       end
-  
-      {}
+      
+      h = {
+        constraint_list: @constraints.map(&:to_h)
+      }
+      super(h)        {}
+      
     else
       # get the constraints
 
@@ -487,16 +495,41 @@ end
 
 class ElseAction < Action
   
-  def initialize(h={})
+  def initialize(obj=[])
 
     options = {
-      constraint_list: ''
+      constraint_list: []
     }
+    
+    if obj.is_a? Hash then
+      
+      h = obj
 
-    super(options.merge h)
+      super(options.merge h)      
+      
+    elsif obj.is_a? Array
+      
+      e, macro = obj
+      
+      # find any nested actions
+      item = e.element('item')
+      
+      if item then
+        
+        ap = ActionsNlp.new
+        obj2 = action_to_object(ap, item, item, macro)      
+        puts 'obj2: ' + obj2.inspect if $debug
+        #macro.add obj2
+        
+      end
+      
+      super(options)
+    end
+    
     
 
-  end  
+
+  end    
   
   def to_s(colour: false, indent: 0)
     'Else'
@@ -676,6 +709,9 @@ class SetHotspotAction < ConnectivityAction
   
   def initialize(h={})
 
+    # to-do: check when *disable hotspot*, is the 
+    #        *enable wifi* option selected?
+    
     options = {
       device_name: "", state: 0, turn_wifi_on: true, use_legacy_mechanism: false, mechanism: 0
 
@@ -686,8 +722,15 @@ class SetHotspotAction < ConnectivityAction
   end
   
   def to_s(colour: false, indent: 0)
-    action = @h[:turn_wifi_on] ? 'Enable' : 'Disable'
-    action + ' HotSpot'
+    
+    @s =  "%s HotSpot" % [@h[:state] == 0 ? 'Enable' : 'Disable']
+    
+    if @h[:state] == 1 then
+      @s += "\n" + (@h[:turn_wifi_on] ? 'Enable WiFi' : 'Don\'t Enable Wifi')
+    end
+    
+    super()
+    
   end
 end
 
@@ -2374,8 +2417,31 @@ end
 # Category: Screen
 #
 class ScreenOnAction < ScreenAction
+  using ColouredText
 
-  def initialize(h={})
+  def initialize(obj=nil)
+    
+    debug = false
+    
+    h = if obj.is_a? Hash then
+    
+      obj
+      
+    elsif obj.is_a? Array
+=begin      
+      puts 'obj: ' + obj.inspect if debug
+      e, macro = obj
+      puts ('e: ' + e.xml.inspect).debug if debug
+      a = e.xpath('item/*')
+
+      txt = e.text.to_s
+      puts ('txt: ' + txt.inspect).debug if debug
+      state = txt[/Screen (On|Off)/i,1]
+      
+      {screen_off: state.downcase == 'off'}
+=end      
+      {}
+    end    
 
     options = {
       pie_lock_screen: false,

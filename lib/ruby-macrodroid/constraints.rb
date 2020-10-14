@@ -798,7 +798,18 @@ class MacroDroidVariableConstraint < Constraint
       h[:variable] = {}
       h[:variable][:name] = h[:loperand]
       h[:variable][:type] = 2
-      h[:string_value] = h[:roperand]
+      
+      if h[:roperand] =~ /true|false/i then
+        
+        val = h[:roperand].downcase == 'true'
+        h[:boolean_value] = val
+        h[:variable][:type] = 0
+        h[:variable][:boolean_value] = val
+        h[:string_value] = h[:roperand].capitalize
+      else
+        h[:string_value] = h[:roperand]
+      end
+
     end
         
     options = {

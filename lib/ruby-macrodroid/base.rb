@@ -9,9 +9,10 @@
 
 module ObjectX
   
+  
   def action_to_object(ap, e, item, macro)
     
-    debug = $debug
+    debug = false
     
     puts 'inside action_to_object: item.xml: ' + item.xml if debug
         
@@ -32,15 +33,23 @@ module ObjectX
         
         r = ap.find_action action          
         puts 'r: ' + r.inspect if debug
-        puts 'description: ' + description.xml.inspect if debug
-        #o = r[0].new([description, self]) if r
-        index = macro.actions.length
-        macro.add Action.new        
-        o = object_create(r[0],[description, macro]) if r
-        macro.actions[index] = o
-        puts 'after o' if debug
-        o
         
+        if r[1].any? then
+          
+          macro.add r[0].new(r[1])
+          
+        else
+          
+          puts 'description: ' + description.xml.inspect if debug
+          #o = r[0].new([description, self]) if r
+          index = macro.actions.length
+          macro.add Action.new        
+          o = object_create(r[0],[description, macro]) if r
+          macro.actions[index] = o
+          puts 'after o' if debug
+          o
+          
+        end
       end
       
     else
@@ -185,11 +194,11 @@ class MacroObject
   private
   
   def hashify(h)
-    
+    puts 'h: ' + h.inspect
     h2 = h.inject({}) do |r,x|
-      puts 'x: ' + x.inspect if $debug
+      puts 'x: ' + x.inspect #if $debug
       key, value = x
-      puts 'key: ' + key.inspect if $debug
+      puts 'key: ' + key.inspect #if $debug
       new_key = key.to_s.gsub(/\w_\w/){|x| x[0] + x[-1].upcase}
       new_key = new_key.prepend 'm_' unless @list.include? new_key
       new_key = 'm_SIGUID' if new_key == 'm_siguid'

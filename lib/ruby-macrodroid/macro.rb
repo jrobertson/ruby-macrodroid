@@ -25,6 +25,7 @@ VAR_TYPES = {
 
 class TriggersNlp
   include AppRoutes
+  using ColouredText
 
   def initialize(macro=nil)
 
@@ -34,8 +35,40 @@ class TriggersNlp
 
   end
 
-  def triggers(params) 
+  def triggers(params)
     
+    # -- Battery/Power ---------------------------------------------
+    
+    get /^Power Connected: (Wired \([^\)]+\))/i do |s|
+      
+      h = {
+        power_connected_options: [true, true, true],
+        has_set_usb_option: true,
+        power_connected: true
+      }
+        
+      a = ['Wired (Fast Charge)', 'Wireless', 'Wired (Slow Charge)']
+
+      puts ('s: ' + s.inspect).debug
+      
+      options = s.downcase.split(/ \+ /)
+      puts ('options: ' + options.inspect).debug
+      
+      h[:power_connected_options] = a.map {|x| options.include? x.downcase }
+      
+      [ExternalPowerTrigger, h]
+    end
+    
+    get /^Power Connected: Any/i do |s|
+      
+      h = {
+        power_connected_options: [true, true, true],
+        has_set_usb_option: true,
+        power_connected: true
+      }
+      
+      [ExternalPowerTrigger, h]
+    end    
     # e.g. at 7:30pm daily
     get /^(?:at )?(\d+:\d+(?:[ap]m)?) daily/i do |time, days|
       [TimerTrigger, {time: time, 
@@ -135,13 +168,25 @@ class ActionsNlp
   def initialize(macro=nil)
 
     super()
+
     params = {macro: macro}
     actions(params)
 
   end
 
   def actions(params) 
-
+    
+    # -- Connectivity ------------------------------------------------------
+    
+    get /^(Enable|Disable) HotSpot/i do |state|
+      enable, state = if state.downcase == 'enable' then
+        [true, 0]
+      else
+        [false, 1]
+      end
+      [SetHotspotAction, {turn_wifi_on: enable, state: state }]
+    end   
+    
     # e.g. message popup: hello world!
     get /^message popup: (.*)/i do |msg|
       [ToastAction, {msg: msg}]
@@ -256,13 +301,13 @@ class ActionsNlp
     
     #
     get /^WebHook \(Url\)/i do
-      [OpenWebPageAction, params]
+      [OpenWebPageAction, {}]
     end
     
     # e.g. webhook entered_kitchen
     #
     get /^webhook$/i do
-      [OpenWebPageAction, params]
+      [OpenWebPageAction, {}, params[:macro]]
     end
     
     # -- Location ---------------------------------------------------------
@@ -272,7 +317,7 @@ class ActionsNlp
     end    
     
     get /^Share Location$/i do
-      [ShareLocationAction, params]
+      [ShareLocationAction, {}]
     end    
     
     #a: Keep Device Awake Screen On Until Disabled
@@ -296,7 +341,7 @@ class ActionsNlp
     end
     
     get /Keep Device Awake$/i do
-      [KeepAwakeAction, params]
+      [KeepAwakeAction, {}]
     end    
     
     #a: Disable Keep Awake
@@ -311,6 +356,10 @@ class ActionsNlp
       [IfConditionAction, {}]
     end
     
+    get /else/i do
+      [ElseAction, {}]
+    end    
+    
     get /End If/i do
       [EndIfAction, {}]
     end          
@@ -320,6 +369,12 @@ class ActionsNlp
     get /^Set Variable$/i do
       [SetVariableAction, {}]
     end        
+    
+    # -- Screen ------------------------------------------------
+    #
+    get /^Screen (On|Off)$/i do |state|
+      [ScreenOnAction, {screen_off: state.downcase == 'off'}]
+    end       
 
   end
 
@@ -702,7 +757,7 @@ class Macro
           action = e.text.strip
           r = ap.find_action action          
           #r[0].new(r[1]) if r
-          self.add object_create(r[0],r[1]) if r
+          self.add object_create(r[0],*r[1..-1]) if r
           
         end  
 
