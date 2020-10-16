@@ -110,14 +110,16 @@ class MacroDroid
   using Params  
 
   attr_reader :macros, :geofences, :yaml
-  attr_accessor :deviceid, :remote_url
+  attr_accessor :deviceid, :remote_url, :picture_path
   
   # note: The deviceid can only be found from an existing Webhook trigger, 
   #       generated from MacroDroid itself.
 
-  def initialize(obj=nil, deviceid: nil, remote_url: nil, debug: false)
+  def initialize(obj=nil, deviceid: nil, remote_url: nil, 
+                 picture_path: '/storage/emulated/0/Pictures', debug: false)
 
     @deviceid, @remote_url, @debug = deviceid, remote_url, debug    
+    @picture_path = picture_path
     
     @geofences = {}
     
@@ -334,7 +336,8 @@ class MacroDroid
 #       puts '@geofences: ' + @geofences.inspect if @debug
       
       m = Macro.new(geofences: @geofences.map(&:last), deviceid: @deviceid, 
-                    remote_url: @remote_url, debug: @debug )
+                    remote_url: @remote_url, picture_path: @picture_path, 
+                    debug: @debug )
       m.import_h(macro)
       m
 
@@ -356,7 +359,8 @@ class MacroDroid
     @macros = doc.root.xpath('item').map do |node|
       puts ('geofences: ' + geofences.inspect).highlight if @debug
       Macro.new(geofences: geofences.map(&:last), deviceid: @deviceid, 
-                remote_url: @remote_url, debug: @debug).import_xml(node)
+                remote_url: @remote_url, picture_path: @picture_path, 
+                debug: @debug).import_xml(node)
       
     end
 
@@ -380,7 +384,7 @@ class MacroDroid
     @macros = doc.root.xpath('macro').map do |node|
       puts 'node: ' + node.inspect if @debug    
       Macro.new(geofences: @geofences.map(&:last), deviceid: @deviceid, 
-                debug: @debug).import_xml(node)
+                picture_path: @picture_path, debug: @debug).import_xml(node)
       
     end
   end

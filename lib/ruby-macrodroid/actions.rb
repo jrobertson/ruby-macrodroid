@@ -284,11 +284,64 @@ end
 #
 class TakePictureAction < CameraAction
 
-  def initialize(h={})
+  def initialize(obj=nil)
 
+    
+    h = if obj.is_a? Hash then
+
+      macro = obj[:macro]    
+      obj.delete :macro
+      obj
+
+      
+    elsif obj.is_a? Array
+      
+      e, macro = obj
+      
+      puts 'e: ' + e.xml.inspect
+
+      a = e.xpath('item/*')
+      
+      if a.any? then
+        
+        h2 = a.map {|node| [node.name.to_sym, node.text.to_s.strip]}.to_h
+        
+        desc = ''
+        
+        if h2[:description] then
+
+          desc = h2[:description]
+          h2.delete :description
+          puts 'desc: ' + desc.inspect
+          
+          if desc.length > 1 then
+            
+            flash = case desc
+            when /Flash On/i
+              1
+            when /Flash Auto/i
+              2
+            else
+              0
+            end
+            
+
+          end          
+          
+        end
+        
+        {
+          use_front_camera: (desc =~ /Front Facing/ ? true : false),
+          flash_option: flash
+        }.merge(h2)          
+        
+      
+      end
+    end
+    
     options = {
-      new_path: '/storage/sdcard1/DCIM/Camera',
-      path: '/storage/sdcard1/DCIM/Camera',
+      new_path: macro.picture_path,
+      path: macro.picture_path,
       show_icon: true,
       use_front_camera: true,
       flash_option: 0
@@ -304,7 +357,22 @@ class TakePictureAction < CameraAction
   end
 
   def to_s(colour: false, indent: 0)
-    'Take Picture'
+    
+    flash = case @h[:flash_option]
+    when 0
+      ''
+    when 1
+      'Flash On'
+    when 2
+      'Flash Auto'
+    end
+    
+    @s = 'Take Picture'# + @h.inspect
+    a = [@h[:use_front_camera] ? 'Front Facing' : 'Rear Facing']
+    a << flash if flash.length > 0
+    @s += "\n" + a.join(', ')
+    super()
+    
   end  
 
 end

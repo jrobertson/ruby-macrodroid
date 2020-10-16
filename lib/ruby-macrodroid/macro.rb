@@ -68,7 +68,14 @@ class TriggersNlp
       }
       
       [ExternalPowerTrigger, h]
-    end    
+    end   
+    
+    # -- Device Events ----------------------------------------------------
+  
+    get /^Screen[ _](On|Off)/i do |state|            
+      [ScreenOnOffTrigger, {screen_on: state.downcase == 'on'}]
+    end      
+    
     # e.g. at 7:30pm daily
     get /^(?:at )?(\d+:\d+(?:[ap]m)?) daily/i do |time, days|
       [TimerTrigger, {time: time, 
@@ -465,13 +472,13 @@ class Macro
 
   attr_reader :local_variables, :triggers, :actions, :constraints, 
       :guid, :deviceid
-  attr_accessor :title, :description, :remote_url
+  attr_accessor :title, :description, :remote_url, :picture_path
 
-  def initialize(name=nil, geofences: nil, deviceid: nil, remote_url: nil, 
-                 debug: false)
+  def initialize(name=nil, geofences: nil, deviceid: nil, remote_url: nil, \
+                 picture_path: nil, debug: false)
 
     @title, @geofences, @deviceid, @debug = name, geofences, deviceid, debug
-    @remote_url = remote_url
+    @remote_url, @picture_path = remote_url, picture_path
     
     puts 'inside Macro#initialize' if @debug    
           

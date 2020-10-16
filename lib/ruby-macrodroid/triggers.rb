@@ -1199,6 +1199,11 @@ class ScreenOnOffTrigger < DeviceEventsTrigger
 
   end
   
+  def match?(detail={}, model=nil)
+    #@h[:screen_on] == detail[:screen_on]
+    true
+  end  
+  
   def to_s(colour: false)
     'Screen ' + (@h[:screen_on] ? 'On' : 'Off')
   end
