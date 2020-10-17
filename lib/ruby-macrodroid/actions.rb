@@ -1888,7 +1888,7 @@ class PauseAction < Action
     options = {
       delay_in_milli_seconds: 0, delay_in_seconds: 1, use_alarm: false
     }
-    super(h)
+    super(options.merge h)
     
   end  
   

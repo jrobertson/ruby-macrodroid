@@ -347,13 +347,13 @@ class ActionsNlp
       [KeepAwakeAction, h]
     end
     
-    get /Keep Device Awake$/i do
+    get /(?:Keep Device|stay) Awake$/i do
       [KeepAwakeAction, {}]
     end    
     
     #a: Disable Keep Awake
     #
-    get /Disable Keep Awake/i do
+    get /Disable Keep Awake|stay awake off/i do
       [KeepAwakeAction, {enabled: false, screen_option: 0}]
     end    
 
@@ -375,6 +375,10 @@ class ActionsNlp
     #
     get /^Set Variable$/i do
       [SetVariableAction, {}]
+    end        
+
+    get /^wait (\d+) seconds$/i do |seconds|
+      [PauseAction, {delay_in_seconds: seconds.to_i}]
     end        
     
     # -- Screen ------------------------------------------------
