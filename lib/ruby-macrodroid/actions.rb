@@ -150,7 +150,7 @@ class OpenWebPageAction < ApplicationAction
 
   def initialize(obj={}, macro=nil)
 
-    $debug = true    
+    $debug = false    
     puts ('obj: ' + obj.inspect).debug if $debug
     
     h = if obj.is_a? Hash then
@@ -190,9 +190,9 @@ class OpenWebPageAction < ApplicationAction
     #h[:url_to_open] = h[:url] if h[:url] and h[:url].length > 1
 
     options = {
-      variable_to_save_response: {:string_value=>"", :name=>"coords", 
-      decimal_value: 0.0, isLocal: true, m_boolean_value: false, 
-      excludeFromLog: false, int_value: 0, type: 2},
+      #variable_to_save_response: {:string_value=>"", :name=>"coords", 
+      #decimal_value: 0.0, isLocal: true, m_boolean_value: false, 
+      #excludeFromLog: false, int_value: 0, type: 2},
       url_to_open: '',
       http_get: true,
       disable_url_encode: false,
@@ -298,7 +298,7 @@ class TakePictureAction < CameraAction
       
       e, macro = obj
       
-      puts 'e: ' + e.xml.inspect
+      #puts 'e: ' + e.xml.inspect
 
       a = e.xpath('item/*')
       
@@ -312,7 +312,7 @@ class TakePictureAction < CameraAction
 
           desc = h2[:description]
           h2.delete :description
-          puts 'desc: ' + desc.inspect
+          #puts 'desc: ' + desc.inspect
           
           if desc.length > 1 then
             
@@ -469,10 +469,14 @@ end
 
 # Conditions/Loops
 #
-class IfConditionAction < Action
 
+class IfAction < Action
+  using ColouredText
+  
   def initialize(obj=nil)
-
+    
+    $debug = false
+    
     options = {
       a: true,
       constraint_list: []
@@ -492,10 +496,10 @@ class IfConditionAction < Action
       super()
       puts 'e.xml: ' + e.xml if $debug
       puts 'e.text: ' + e.text.to_s.strip if $debug
-      raw_txt = e.text.to_s.strip[/^if [^$]+/i] || e.text('item/description')
+      raw_txt = e.text.to_s.strip[/^#{@label}[^$]+/i] || e.text('item/description')
       puts 'raw_txt: ' + raw_txt.inspect if $debug
       
-      clause = raw_txt[/^If (.*)/i,1]
+      clause = raw_txt[/^#{@label}(.*)/i,1]
       puts 'clause: ' + clause.inspect if $debug
       conditions = clause.split(/\s+\b(?:AND|OR)\b\s+/i)
       puts 'conditions: ' + conditions.inspect if $debug
@@ -514,6 +518,7 @@ class IfConditionAction < Action
       
       # find any nested actions
       item = e.element('item')
+      #puts  ('item: ' + item.xml.inspect).debug if $debug
       
       if item then
         
@@ -534,19 +539,13 @@ class IfConditionAction < Action
 
     end
     
-
-    
-
-    
-    @label = 'If '
-
   end
-
+  
   def to_s(colour: false, indent: 0)
     
     h = @h.clone    
     #h.delete :macro
-    @s = 'If '
+    @s = @label
     operator = @h[:is_or_condition] ? 'OR' : 'AND'
     constraints = @constraints.map \
         {|x| '  ' * indent + x.to_summary(colour: colour)}.join(" %s " % operator)    
@@ -557,7 +556,18 @@ class IfConditionAction < Action
     out << s + constraints
     out.join("\n")
     
-  end 
+  end   
+      
+end
+
+class IfConditionAction < IfAction
+
+  def initialize(obj=nil)
+
+    @label = 'If '
+    super(obj)
+    
+  end
   
 end
 
@@ -605,41 +615,15 @@ class ElseAction < Action
   
 end
 
-class ElseIfConditionAction < Action
+class ElseIfConditionAction < IfAction
   
-  def initialize(h={})
+  def initialize(obj=nil)
 
-    options = {
-      constraint_list: ''
-    }
-
-    super(options.merge h)
-    @label = 'Else If '
-
-  end  
-  
-  def to_s(colour: false, indent: 0)
+    @label = 'Else If '    
+    super(obj)
     
-    h = @h.clone    
-    h.delete :macro
-    @s = 'Else If '
-    operator = @h[:is_or_condition] ? 'OR' : 'AND'
-    constraints = @constraints.map \
-        {|x| '  ' * indent + x.to_summary(colour: colour)}.join(" %s " % operator)    
-    
-    out = []
-    out << "; %s" % @h[:comment] if @h[:comment]
-    s = @s.lines.map {|x| ('  ' * indent) + x}.join
-    out << s + constraints
-    out.join("\n")
-    
-  end    
-  
-  def to_summary(colour: false)
-    'foo'
   end
-    
-
+  
 end
 
 
@@ -1720,6 +1704,49 @@ class ConfirmNextAction < Action
   
   alias to_summary to_s
   
+end
+
+class DisableMacroAction < Action
+  
+  def initialize(obj=nil)
+    
+    h = if obj.is_a? Hash then
+    
+      obj
+      
+    elsif obj.is_a? Array
+      
+      e, macro = obj
+      
+      # find the macro guid for the given name
+      name = e.text('item/description').to_s
+      found = macro.parent.macros.find {|macro| macro.title =~ /#{name}/ }
+      
+      if found then     
+        {macro_name: found.title, GUID: found.guid}
+      else
+        {macro_name: name}
+      end
+
+    end      
+    
+    # state: 0 = enable, 1 = disable, 2 = toggle
+    
+    options = {macro_name: "Change brightness", state: 1, GUID: nil}
+    super(options.merge h)
+    
+  end  
+  
+  def to_s(colour: false, indent: 0)
+    
+    state = %w(Enable Disable Toggle)[@h[:state]]
+    @s = state + ' macro'# + @h.inspect
+    @s += "\n" + @h[:macro_name]
+    super()
+    
+  end
+  
+  alias to_summary to_s
 end
 
 # MacroDroid Specific

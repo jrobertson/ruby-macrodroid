@@ -181,7 +181,29 @@ class ActionsNlp
 
   end
 
-  def actions(params) 
+  def actions(params)
+    
+    # -- Conditions/Loops ---------------------------------------------
+    #
+    
+    get /else if (.*)/i do
+      [ElseIfConditionAction, {}]
+    end        
+    
+    #e.g a: if Airplane mode enabled
+    #
+    get /if (.*)/i do
+      [IfConditionAction, {}]
+    end    
+    
+    get /else/i do
+      [ElseAction, {}]
+    end    
+    
+    get /End If/i do
+      [EndIfAction, {}]
+    end          
+    
     
     # -- Connectivity ------------------------------------------------------
     
@@ -195,7 +217,7 @@ class ActionsNlp
     end   
     
     # e.g. message popup: hello world!
-    get /^message popup: (.*)/i do |msg|
+    get /^(?:message popup|popup message): (.*)/i do |msg|
       [ToastAction, {msg: msg}]
     end
 
@@ -357,22 +379,15 @@ class ActionsNlp
       [KeepAwakeAction, {enabled: false, screen_option: 0}]
     end    
 
-    #e.g a: if Airplane mode enabled
-    #
-    get /if (.*)/i do
-      [IfConditionAction, {}]
-    end
-    
-    get /else/i do
-      [ElseAction, {}]
-    end    
-    
-    get /End If/i do
-      [EndIfAction, {}]
-    end          
     
     # -- MacroDroid Specific ------------------------------------------------
     #
+    
+    get /^((?:En|Dis)able) Macro$/i do |rawstate|
+      state = %w(enable disable toggle).index(rawstate.downcase)
+      [DisableMacroAction, {state: state}]
+    end        
+    
     get /^Set Variable$/i do
       [SetVariableAction, {}]
     end        
@@ -421,7 +436,7 @@ class ConstraintsNlp
     
     # -- MacroDroid specific -----------------------------------------------------------------------
     
-    get /^(\w+) (=) (\[?\w+\]?)/i do |loperand, operator, roperand|
+    get /^(\w+) (=) (.*)/i do |loperand, operator, roperand|
       
       h = {
         loperand: loperand, 
@@ -475,19 +490,20 @@ class Macro
   include ObjectX
 
   attr_reader :local_variables, :triggers, :actions, :constraints, 
-      :guid, :deviceid
+      :guid, :deviceid, :parent
   attr_accessor :title, :description, :remote_url, :picture_path
 
   def initialize(name=nil, geofences: nil, deviceid: nil, remote_url: nil, \
-                 picture_path: nil, debug: false)
+                 picture_path: nil, parent: nil, debug: false)
 
     @title, @geofences, @deviceid, @debug = name, geofences, deviceid, debug
-    @remote_url, @picture_path = remote_url, picture_path
+    @remote_url, @picture_path, @parent = remote_url, picture_path, parent
     
     puts 'inside Macro#initialize' if @debug    
           
     @local_variables, @triggers, @actions, @constraints = {}, [], [], []
     @h = {}
+    @guid = generate_guid()
     
   end
   
@@ -529,7 +545,7 @@ class Macro
       m_description: '',
       m_name: title(),
       m_excludeLog: false,
-      m_GUID: guid(),
+      m_GUID: @guid,
       m_isOrCondition: false,
       m_enabled: true,
       m_descriptionOpen: false,
@@ -548,6 +564,7 @@ class Macro
       puts 'h:' + h.inspect
     end
     
+    @guid = h[:guid]
     @category = h[:category]
     @title = h[:name]
     @description = h[:description]
@@ -1036,8 +1053,8 @@ EOF
 
   private
   
-  def guid()
-    '-' + rand(1..9).to_s + 18.times.map { rand 9 }.join    
+  def generate_guid()
+    ('-' + rand(1..9).to_s + 18.times.map { rand 9 }.join).to_i
   end
 
   def object(h={})

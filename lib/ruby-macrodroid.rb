@@ -122,6 +122,7 @@ class MacroDroid
     @picture_path = picture_path
     
     @geofences = {}
+    @macros = []
     
     if obj then
       
@@ -145,34 +146,7 @@ class MacroDroid
         
         if s =~ /m(?:acro)?:\s/ then
           
-          puts 'before RowX.new' if @debug
-
-          s2 = s.gsub(/^g:/,'geofence:').gsub(/^m:/,'macro:')\
-              .gsub(/^d:/,'description:').gsub(/^v:/,'variable:')\
-              .gsub(/^t:/,'trigger:').gsub(/^a:/,'action:')\
-              .gsub(/^c:/,'constraint:').gsub(/^#.*/,'')
-          
-          a = s2.split(/(?=^macro:)/)
-          
-          raw_geofences = a.shift if a.first =~ /^geofence/
-          raw_macros = a.join
-          #raw_macros, raw_geofences .reverse
-          
-          puts 'raw_macros: ' + raw_macros.inspect if @debug
-          
-          if raw_geofences then
-            
-            geoxml = RowX.new(raw_geofences).to_xml
-            
-            geodoc = Rexle.new(geoxml)  
-            geofences = geodoc.root.xpath('item/geofence')        
-            @geofences = fetch_geofences(geofences) if geofences.any?          
-            
-          end
-          
-          xml = RowX.new(raw_macros, allow_lonely_keyfield: true).to_xml
-          puts 'xml: ' + xml if @debug
-          import_rowxml(xml)
+          import_txt(s)
           
         elsif s =~ /^# / 
           xml = pc_to_xml(s)
@@ -228,6 +202,10 @@ class MacroDroid
   
   def export(filepath)
     FileX.write filepath, to_json
+  end
+  
+  def import(s)
+    import_txt(s)
   end
 
   def to_json()
@@ -337,7 +315,7 @@ class MacroDroid
       
       m = Macro.new(geofences: @geofences.map(&:last), deviceid: @deviceid, 
                     remote_url: @remote_url, picture_path: @picture_path, 
-                    debug: @debug )
+                    parent: self, debug: @debug )
       m.import_h(macro)
       m
 
@@ -356,15 +334,50 @@ class MacroDroid
     puts 'import_rowxml: @geofences: ' + @geofences.inspect if @debug
     geofences = @geofences
     
-    @macros = doc.root.xpath('item').map do |node|
+    a = doc.root.xpath('item').map do |node|
       puts ('geofences: ' + geofences.inspect).highlight if @debug
       Macro.new(geofences: geofences.map(&:last), deviceid: @deviceid, 
                 remote_url: @remote_url, picture_path: @picture_path, 
-                debug: @debug).import_xml(node)
+                parent: self, debug: @debug).import_xml(node)
       
     end
+    
+    @macros.concat a
 
-  end  
+  end
+
+  def import_txt(s)
+    
+    puts 'before RowX.new' if @debug
+
+    s2 = s.gsub(/^g:/,'geofence:').gsub(/^m:/,'macro:')\
+        .gsub(/^d:/,'description:').gsub(/^v:/,'variable:')\
+        .gsub(/^t:/,'trigger:').gsub(/^a:/,'action:')\
+        .gsub(/^c:/,'constraint:').gsub(/^#.*/,'')
+    
+    a = s2.split(/(?=^macro:)/)
+    
+    raw_geofences = a.shift if a.first =~ /^geofence/
+    raw_macros = a.join
+    #raw_macros, raw_geofences .reverse
+    
+    puts 'raw_macros: ' + raw_macros.inspect if @debug
+    
+    if raw_geofences then
+      
+      geoxml = RowX.new(raw_geofences).to_xml
+      
+      geodoc = Rexle.new(geoxml)  
+      geofences = geodoc.root.xpath('item/geofence')        
+      @geofences = fetch_geofences(geofences) if geofences.any?          
+      
+    end
+    
+    xml = RowX.new(raw_macros, allow_lonely_keyfield: true).to_xml
+    puts 'xml: ' + xml if @debug
+    import_rowxml(xml)
+    
+  end
   
   def import_xml(raws)
     
@@ -384,7 +397,8 @@ class MacroDroid
     @macros = doc.root.xpath('macro').map do |node|
       puts 'node: ' + node.inspect if @debug    
       Macro.new(geofences: @geofences.map(&:last), deviceid: @deviceid, 
-                picture_path: @picture_path, debug: @debug).import_xml(node)
+                picture_path: @picture_path, parent: self, debug: @debug)\
+                .import_xml(node)
       
     end
   end

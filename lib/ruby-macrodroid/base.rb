@@ -34,7 +34,9 @@ module ObjectX
         r = ap.find_action action          
         puts 'r: ' + r.inspect if debug
         
-        if r[1].any? then
+        nested = description.element('item/description')
+        
+        if r[1].any? and not nested then
           
           macro.add r[0].new(r[1])
           
@@ -194,11 +196,11 @@ class MacroObject
   private
   
   def hashify(h)
-    puts 'h: ' + h.inspect
+    #puts 'h: ' + h.inspect
     h2 = h.inject({}) do |r,x|
-      puts 'x: ' + x.inspect #if $debug
+      #puts 'x: ' + x.inspect #if $debug
       key, value = x
-      puts 'key: ' + key.inspect #if $debug
+      #puts 'key: ' + key.inspect #if $debug
       new_key = key.to_s.gsub(/\w_\w/){|x| x[0] + x[-1].upcase}
       new_key = new_key.prepend 'm_' unless @list.include? new_key
       new_key = 'm_SIGUID' if new_key == 'm_siguid'
