@@ -1716,17 +1716,19 @@ class DisableMacroAction < Action
       
     elsif obj.is_a? Array
       
-      e, macro = obj
+      e, macro, h2 = obj
       
       # find the macro guid for the given name
       name = e.text('item/description').to_s
       found = macro.parent.macros.find {|macro| macro.title =~ /#{name}/ }
       
-      if found then     
+      h3 = if found then     
         {macro_name: found.title, GUID: found.guid}
       else
         {macro_name: name}
       end
+      
+      h3.merge h2
 
     end      
     

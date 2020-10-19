@@ -46,7 +46,7 @@ module ObjectX
           #o = r[0].new([description, self]) if r
           index = macro.actions.length
           macro.add Action.new        
-          o = object_create(r[0],[description, macro]) if r
+          o = object_create(r[0],[description, macro, r[1]]) if r
           macro.actions[index] = o
           puts 'after o' if debug
           o

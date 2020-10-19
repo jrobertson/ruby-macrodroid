@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'ruby-macrodroid'
-  s.version = '0.9.10'
+  s.version = '0.9.11'
   s.summary = 'A macro builder for MacroDroid. #unofficialgem #experimental'
   s.authors = ['James Robertson']
   s.files = Dir[
@@ -8,8 +8,10 @@ Gem::Specification.new do |s|
     'lib/ruby-macrodroid/base.rb', 
     'lib/ruby-macrodroid/triggers.rb', 
     'lib/ruby-macrodroid/actions.rb', 
-    'lib/ruby-macrodroid/triggers.rb',
     'lib/ruby-macrodroid/constraints.rb',
+    'lib/ruby-macrodroid/triggersnlp.rb', 
+    'lib/ruby-macrodroid/actionsnlp.rb', 
+    'lib/ruby-macrodroid/constraintsnlp.rb',    
     'lib/ruby-macrodroid/macro.rb'
   ]
   s.add_runtime_dependency('glw', '~> 0.2', '>=0.2.2')    

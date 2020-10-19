@@ -2,15 +2,10 @@
 
 
 # This file contains the following classes:
-#  
-#  ## Nlp classes
-#  
-#  TriggersNlp ActionsNlp ConstraintsNlp
-#     
+#      
 #  ## Macro class
 #  
 #  Macro
-
 
 
 VAR_TYPES = {
@@ -20,465 +15,6 @@ VAR_TYPES = {
   Integer: [1, :int_value],
   Float: [3, :decimal_value]
 }
-
-
-
-class TriggersNlp
-  include AppRoutes
-  using ColouredText
-
-  def initialize(macro=nil)
-
-    super()
-    params = {macro: macro}
-    triggers(params)
-
-  end
-
-  def triggers(params)
-    
-    # -- Battery/Power ---------------------------------------------
-    
-    get /^Power Connected: (Wired \([^\)]+\))/i do |s|
-      
-      h = {
-        power_connected_options: [true, true, true],
-        has_set_usb_option: true,
-        power_connected: true
-      }
-        
-      a = ['Wired (Fast Charge)', 'Wireless', 'Wired (Slow Charge)']
-
-      puts ('s: ' + s.inspect).debug
-      
-      options = s.downcase.split(/ \+ /)
-      puts ('options: ' + options.inspect).debug
-      
-      h[:power_connected_options] = a.map {|x| options.include? x.downcase }
-      
-      [ExternalPowerTrigger, h]
-    end
-    
-    get /^Power Connected: Any/i do |s|
-      
-      h = {
-        power_connected_options: [true, true, true],
-        has_set_usb_option: true,
-        power_connected: true
-      }
-      
-      [ExternalPowerTrigger, h]
-    end   
-    
-    # -- Device Events ----------------------------------------------------
-  
-    get /^Screen[ _](On|Off)/i do |state|            
-      [ScreenOnOffTrigger, {screen_on: state.downcase == 'on'}]
-    end      
-    
-    # e.g. at 7:30pm daily
-    get /^(?:at )?(\d+:\d+(?:[ap]m)?) daily/i do |time, days|
-      [TimerTrigger, {time: time, 
-                      days: %w(Mon Tue Wed Thu Fri Sat Sun).join(', ')}]
-    end       
-
-    get /^(?:at )?(\d+:\d+(?:[ap]m)?) (?:on )?(.*)/i do |time, days|
-      [TimerTrigger, {time: time, days: days}]
-    end
-
-    # time.is? 'at 18:30pm on Mon or Tue'
-    get /^time.is\? ['"](?:at )?(\d+:\d+(?:[ap]m)?) (?:on )?(.*)['"]/i do |time, days|      
-      [TimerTrigger, {time: time, days: days.gsub(' or ',', ')}]
-    end     
-    
-    get /^shake[ _]device\??$/i do 
-      [ShakeDeviceTrigger, {}]
-    end
-    
-    get /^Flip Device (.*)$/i do |motion|
-       facedown = motion =~ /Face Up (?:->|to) Face Down/i
-      [FlipDeviceTrigger, {face_down: facedown }]
-    end
-    
-    get /^flip_device_down\?$/i do
-      [FlipDeviceTrigger, {face_down: true }]
-    end
-
-    get /^flip_device_up\?$/i do
-      [FlipDeviceTrigger, {face_down: false }]
-    end        
-    
-    get /^Failed Login Attempt$/i do
-      [FailedLoginTrigger, {}]
-    end
-    
-    get /^failed_login?$/i do
-      [FailedLoginTrigger, {}]
-    end         
-
-    get /^Geofence (Entry|Exit) \(([^\)]+)/i do |direction, name|
-      enter_area = direction.downcase.to_sym == :entry
-      [GeofenceTrigger, {name: name, enter_area: enter_area}]
-    end     
-    
-    get /^location (entered|exited) \(([^\)]+)/i do |direction, name|
-      enter_area = direction.downcase.to_sym == :entered
-      [GeofenceTrigger, {name: name, enter_area: enter_area}]
-    end
-    
-    # eg. Proximity Sensor (Near)
-    #
-    get /^Proximity Sensor \(([^\)]+)\)/i do |distance|
-      
-      [ProximityTrigger, {distance: distance}]
-    end    
-    
-    # eg. Proximity near
-    #
-    get /^Proximity (near|far|slow wave|fast wave)/i do |distance|
-      
-      [ProximityTrigger, {distance: distance}]
-    end       
-    
-    get /^WebHook \(Url\)/i do       
-      [WebHookTrigger, params]
-    end      
-
-    get /^WebHook/i do       
-      [WebHookTrigger, params]
-    end
-    
-    get /^wh/i do       
-      [WebHookTrigger, params]
-    end          
-
-    #  MacroDroid specific ---------------------------------------------------------------
-
-    get /^EmptyTrigger$/i do       
-      [EmptyTrigger, params]
-    end          
-    
-  end
-
-  alias find_trigger run_route
-
-  def to_s(colour: false)
-    'TriggersNlp ' + @h.inspect
-  end
-
-  alias to_summary to_s
-end
-
-class ActionsNlp
-  include AppRoutes
-
-  def initialize(macro=nil)
-
-    super()
-
-    params = {macro: macro}
-    actions(params)
-
-  end
-
-  def actions(params)
-    
-    # -- Conditions/Loops ---------------------------------------------
-    #
-    
-    get /else if (.*)/i do
-      [ElseIfConditionAction, {}]
-    end        
-    
-    #e.g a: if Airplane mode enabled
-    #
-    get /if (.*)/i do
-      [IfConditionAction, {}]
-    end    
-    
-    get /else/i do
-      [ElseAction, {}]
-    end    
-    
-    get /End If/i do
-      [EndIfAction, {}]
-    end          
-    
-    
-    # -- Connectivity ------------------------------------------------------
-    
-    get /^(Enable|Disable) HotSpot/i do |state|
-      enable, state = if state.downcase == 'enable' then
-        [true, 0]
-      else
-        [false, 1]
-      end
-      [SetHotspotAction, {turn_wifi_on: enable, state: state }]
-    end   
-    
-    # e.g. message popup: hello world!
-    get /^(?:message popup|popup message): (.*)/i do |msg|
-      [ToastAction, {msg: msg}]
-    end
-
-    # e.g. Popup Message 'hello world!'
-    get /^Popup[ _]Message ['"]([^'"]+)/i do |msg|
-      [ToastAction, {msg: msg}]
-    end
-    
-    # e.g. Popup Message\n  hello world!
-    get /^Popup Message\n\s+(.*)/im do |msg|
-      [ToastAction, {msg: msg}]
-    end    
-            
-    # e.g. Popup Message
-    get /^Popup Message$/i do
-      [ToastAction, {}]
-    end    
-    
-    # e.g. say current time
-    get /^say current[ _]time/i do
-      [SayTimeAction, {}]
-    end    
-    
-    get /^Torch :?(.*)/i do |onoffstate|
-      state = %w(on off toggle).index onoffstate.downcase
-      [CameraFlashLightAction, {state: state}]
-    end    
-    
-    get /^Take Picture/i do
-      [TakePictureAction, {}]
-    end
-    
-    get /^take_picture/i do
-      [TakePictureAction, {}]
-    end           
-    
-    # -- DEVICE ACTIONS ------------------------------------------------------
-    
-    get /^Speak text \(([^\)]+)\)/i do |text|
-      [SpeakTextAction, {text: text}]
-    end           
-    
-    get /^Speak text ['"]([^'"]+)/i do |text|
-      [SpeakTextAction, {text: text}]
-    end         
-    
-    get /^Speak text$/i do |text|
-      [SpeakTextAction, {}]
-    end     
-    
-    get /^Vibrate \(([^\)]+)/i do |pattern|
-      [VibrateAction, {pattern: pattern}]
-    end     
-    
-    get /^Vibrate$/i do |pattern|
-      [VibrateAction, {pattern: 'short buzz'}]
-    end       
-    
-    # e.g. Display Notification: Hi there: This is the body of the message
-    get /^Display Notification: ([^:]+): [^$]+$/i do |subject, text|
-      [NotificationAction, {subject: subject, text: text}]
-    end           
-    
-    
-    # e.g. Enable Wifi
-    get /^(Enable|Disable) Wifi$/i do |raw_state|
-      
-      state = raw_state.downcase.to_sym == :enable ? 0 : 1
-      [SetWifiAction, {state: state}]
-      
-    end    
-    
-    # e.g. Play: Altair
-    get /^Play: (.*)$/i do |name|
-
-      [PlaySoundAction, {file_path: name}]
-      
-    end     
-    
-    # e.g. Launch Settings
-    get /^Launch (.*)$/i do |application|
-
-      h = {
-        application_name: application,
-        package_to_launch: 'com.android.' + application.downcase
-      }
-      [LaunchActivityAction, h]
-      
-    end
-    
-    # e.g. HTTP GET http://someurl.com/something
-    get /^HTTP GET ([^$]+)$/i do |url|
-
-      [OpenWebPageAction, url_to_open: url]
-      
-    end
-        
-    get /^HTTP GET$/i do
-
-      [OpenWebPageAction, {}]
-      
-    end    
-    
-    # e.g. webhook entered_kitchen
-    #
-    get /(?:webhook|HTTP GET) ([^$]+)$/i do |s|
-      key = s =~ /^http/ ? :url_to_open : :identifier      
-      [OpenWebPageAction, {key => s}]
-    end
-    
-    #
-    get /^WebHook \(Url\)/i do
-      [OpenWebPageAction, {}]
-    end
-    
-    # e.g. webhook entered_kitchen
-    #
-    get /^webhook$/i do
-      [OpenWebPageAction, {}, params[:macro]]
-    end
-    
-    # -- Location ---------------------------------------------------------
-    
-    get /^Force Location Update$/i do
-      [ForceLocationUpdateAction, params]
-    end    
-    
-    get /^Share Location$/i do
-      [ShareLocationAction, {}]
-    end    
-    
-    #a: Keep Device Awake Screen On Until Disabled
-    #
-    get /Keep Device Awake Screen On Until Disabled/i do
-      [KeepAwakeAction, {enabled: true, permanent: true, screen_option: 0}]
-    end
-    
-    
-    #a: Keep Device Awake Screen On 1h 1m 1s
-    #
-    get /Keep Device Awake Screen On ([^$]+)/i do |duration|
-      
-      a = duration.split.map(&:to_i)
-      secs = Subunit.new(units={minutes:60, hours:60, seconds: 60}, a).to_i
-      
-      h = {
-        permanent: true, screen_option: 0, seconds_to_stay_awake_for: secs
-      }
-      [KeepAwakeAction, h]
-    end
-    
-    get /(?:Keep Device|stay) Awake$/i do
-      [KeepAwakeAction, {}]
-    end    
-    
-    #a: Disable Keep Awake
-    #
-    get /Disable Keep Awake|stay awake off/i do
-      [KeepAwakeAction, {enabled: false, screen_option: 0}]
-    end    
-
-    
-    # -- MacroDroid Specific ------------------------------------------------
-    #
-    
-    get /^((?:En|Dis)able) Macro$/i do |rawstate|
-      state = %w(enable disable toggle).index(rawstate.downcase)
-      [DisableMacroAction, {state: state}]
-    end        
-    
-    get /^Set Variable$/i do
-      [SetVariableAction, {}]
-    end        
-
-    get /^wait (\d+) seconds$/i do |seconds|
-      [PauseAction, {delay_in_seconds: seconds.to_i}]
-    end        
-    
-    # -- Screen ------------------------------------------------
-    #
-    get /^Screen (On|Off)$/i do |state|
-      [ScreenOnAction, {screen_off: state.downcase == 'off'}]
-    end       
-
-  end
-
-  alias find_action run_route
-
-
-end
-
-class ConstraintsNlp
-  include AppRoutes
-
-  def initialize()
-
-    super()
-    params = {}
-    constraints(params)
-
-  end
-
-  def constraints(params) 
-    
-    # Device State        
-    
-    get /^Device (locked|unlocked)/i do |state|
-      [DeviceLockedConstraint, {locked: state.downcase == 'locked'}]
-    end
-
-    get /^airplane mode (.*)/i do |state|
-      [AirplaneModeConstraint, {enabled: (state =~ /^enabled|on$/i) == 0}]
-    end
-    
-    # 
-    
-    # -- MacroDroid specific -----------------------------------------------------------------------
-    
-    get /^(\w+) (=) (.*)/i do |loperand, operator, roperand|
-      
-      h = {
-        loperand: loperand, 
-        operator: operator, 
-        roperand: roperand
-      }
-      
-      [MacroDroidVariableConstraint, h]
-      
-    end
-    
-    # -- Sensors -----------------------------------
-    #
-    get /^Light Sensor (Less|Greater) than (50.0)lx/i do |operator, val|
-
-      level, option = operator.downcase == 'less' ? [-1,0] : [1,1]
-      
-      h = {
-        light_level: level,
-        light_level_float: val,
-        option: option
-      }
-      
-      [LightLevelConstraint, h]
-    end
-    
-    get /^Proximity Sensor: (Near|Far)/i do |distance|      
-      [ProximitySensorConstraint, {near: distance.downcase == 'near'}]
-    end
-    
-    
-    # -- Screen and Speaker ---------------------------
-    #
-    get /^Screen (On|Off)/i do |state|      
-      [ScreenOnOffConstraint, {screen_on: state.downcase == 'on'}]
-    end    
-
-  end
-
-  alias find_constraint run_route
-
-end
 
 
 class MacroError < Exception
@@ -504,6 +40,7 @@ class Macro
     @local_variables, @triggers, @actions, @constraints = {}, [], [], []
     @h = {}
     @guid = generate_guid()
+    @enabled = true
     
   end
   
@@ -529,6 +66,18 @@ class Macro
     end
     
   end
+  
+  def disable()
+    @enabled = false
+  end
+  
+  def enable()
+    @enabled = true
+  end
+  
+  def enabled?()
+    @enabled
+  end
 
   def to_h()
     
@@ -547,7 +96,7 @@ class Macro
       m_excludeLog: false,
       m_GUID: @guid,
       m_isOrCondition: false,
-      m_enabled: true,
+      m_enabled: @enabled,
       m_descriptionOpen: false,
       m_headingColor: 0
     }
@@ -765,7 +314,6 @@ class Macro
         
       end
     
-
       
       ap = ActionsNlp.new self    
       
@@ -939,8 +487,6 @@ EOF
       s = x.to_s(colour: colour)
       #puts 's: ' + s.inspect      
       
-
-      
       r = if indent <= 0 then
       
         lines = s.lines
@@ -993,9 +539,6 @@ EOF
       
     end.join("\n")
 
-
-    
-
     a << actions
 
     
@@ -1005,10 +548,6 @@ EOF
         (colour ? "c".bg_green.gray.bold : 'c') + ": %s" % x
       end.join("\n") 
     end
-    
-
-    
-
     
     a.join("\n") + "\n"
     
@@ -1076,9 +615,6 @@ EOF
       
     end
     
-  end
-  
-
-
+  end  
 
 end
