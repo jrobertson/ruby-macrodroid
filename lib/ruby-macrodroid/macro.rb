@@ -268,7 +268,7 @@ class Macro
               r = tp.find_trigger trigger          
               puts 'r: ' + r.inspect if @debug
               #o = r[0].new([description, self]) if r
-              o = object_create(r[0], [description, self]) if r                            
+              o = object_create(r[0], [description, self, r[1]]) if r                            
               puts 'after o' if @debug
               o
               

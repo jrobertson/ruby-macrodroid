@@ -888,8 +888,17 @@ end
 #
 class SayTimeAction < DateTimeAction
 
-  def initialize(h={})
-
+  def initialize(obj=nil)
+    
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      
+      e, macro = obj      
+      {:'12_hour' => e.text('item/description').to_s[/^\d+/] == '12'}
+      
+    end 
+    
     options = {
       :'12_hour' => true
     }
@@ -910,7 +919,9 @@ class SayTimeAction < DateTimeAction
   end
   
   def to_s(colour: false, indent: 0)
-    'Say Current Time'
+    @s = 'Say Current Time'
+    @s += "\n%s hour clock" % (@h[:'12_hour'] ? '12' : '24')
+    super()
   end  
 
 end

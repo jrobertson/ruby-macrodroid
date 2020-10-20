@@ -61,6 +61,7 @@ class Trigger < MacroObject
         {|x| 'c: ' + x.to_summary(colour: colour, indent: 1)}.join(" %s " % operator)
     
     @constraints.any? ? @s + "\n" + constraints : @s
+    super()
     
   end  
 
@@ -85,7 +86,7 @@ end
 #       ["Any Network"] 
 #       ["some Wifi SSID"] - 1 or more SSID can be supplied
 
-class WifiConnectionTrigger < Trigger
+class WifiConnectionTrigger2 < Trigger
 
   def initialize(h={})
 
@@ -216,7 +217,7 @@ class PowerButtonToggleTrigger < Trigger
   end
 
   def to_s(colour: false)
-    'PowerButtonToggleTrigger ' + @h.inspect
+    "Power Button Toggle (%s)" % @h[:num_toggles] #+ @h.inspect
   end
 
   alias to_summary to_s
@@ -457,7 +458,7 @@ class WebHookTrigger < Trigger
     
     url = "https://trigger.macrodroid.com/%s/%s" % \
         [@deviceid, @h[:identifier]]
-    @s = 'WebHook (Url)' + "\n  " + url
+    @s = 'WebHook (Url)' + "\n" + url
     super()
 
   end
@@ -469,8 +470,15 @@ end
 #
 class WifiConnectionTrigger < Trigger
 
-  def initialize(h={})
+  def initialize(obj=nil)
 
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      {ssid_list: [e.text('item/description').to_s], wifi_state: 2}
+    end 
+    
     options = {
       ssid_list: [],
       wifi_state: 0
@@ -482,10 +490,15 @@ class WifiConnectionTrigger < Trigger
 
   def to_s(colour: false)
     access_point = @h[:ssid_list].first
-    'Connected to network ' + access_point
+    @s = 'Connected to network'
+    @s += "\n" + access_point
+    super()
   end
 
-  alias to_summary to_s
+  def to_summary()
+    access_point = @h[:ssid_list].first
+    'Connected to network' + access_point    
+  end
 end
 
 # Category: Connectivity
@@ -1010,7 +1023,7 @@ class MusicPlayingTrigger < DeviceEventsTrigger
   def to_s(colour: false)
     
     event = @h[:option] == 0 ? 'Started' : 'Stopped'
-    @s = 'Music/Sound Playing' + "\n  %s" % event #+ @h.inspect
+    @s = 'Music/Sound Playing' + "\n%s" % event #+ @h.inspect
     super()
     
   end
@@ -1026,8 +1039,15 @@ end
 #
 class NFCTrigger < DeviceEventsTrigger
 
-  def initialize(h={})
-
+  def initialize(obj=nil)
+    
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      {tag_name: e.text('item/description').to_s}
+    end 
+    
     options = {
     }
 
@@ -1367,8 +1387,24 @@ end
 #
 class ActivityRecognitionTrigger < SensorsTrigger
 
-  def initialize(h={})
-
+  def initialize(obj=nil)
+    
+    #puts 'obj: ' + obj.inspect
+    
+    h = if obj.is_a? Hash then
+    
+      obj
+      
+    elsif obj.is_a? Array
+      
+      e, macro, h2 = obj
+      #puts 'h2: ' + h2.inspect
+      #puts 'e: ' + e.xml
+      s = e.text('item/description').to_s            
+      #puts 's: ' + s.inspect
+      {confidence_level: s[/\d+%$/].to_i}.merge h2
+    end 
+    
     options = {
       confidence_level: 50,
       selected_index: 1
@@ -1381,8 +1417,13 @@ class ActivityRecognitionTrigger < SensorsTrigger
   end
   
   def to_s(colour: false)
+    
     activity = @activity[@h[:selected_index]]
-    'Activity - ' + activity
+    @s = 'Activity - ' + activity #+ @h.inspect
+    @s += "\nConfidence >= %s%%" % @h[:confidence_level]
+    
+    super()
+    
   end
   
   def to_summary(colour: false)
@@ -1577,7 +1618,7 @@ class ShortcutTrigger < Trigger
   end
 
   def to_s(colour: false)
-    'ShortcutTrigger ' + @h.inspect
+    'Shortcut Launched' #+ @h.inspect
   end
 
   alias to_summary to_s
@@ -1633,8 +1674,15 @@ end
 #
 class MediaButtonPressedTrigger < Trigger
 
-  def initialize(h={})
+  def initialize(obj=nil)
 
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      {option: e.text('item/description').to_s}
+    end 
+    
     options = {
       option: 'Single Press',
       cancel_press: false
@@ -1645,7 +1693,50 @@ class MediaButtonPressedTrigger < Trigger
   end
 
   def to_s(colour: false)
-    'MediaButtonPressedTrigger ' + @h.inspect
+    
+    @s = 'Media Button Pressed ' #+ @h.inspect
+    @s += "\n" + @h[:option]
+    super()
+    
+  end
+
+  alias to_summary to_s
+end
+
+class MediaButtonV2Trigger < Trigger
+   
+  def initialize(obj=nil)
+    
+    @a = %w(Play Play/Pause Pause Stop Previous Next Headset Hook)        
+    
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      s = e.text('item/description').to_s
+      a = s.split(/, /)
+      {options_enabled_array: @a.map {|x| a.include? x } }
+    end 
+
+
+    
+    options = {
+      options_enabled_array: [true, false, false, false, false, false, false]
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s(colour: false)
+    
+    
+    options = @a.zip(@h[:options_enabled_array]).select(&:last).map(&:first)
+    
+    @s = 'Media Button V2 ' #+ @h.inspect
+    @s += "\n" + options.join(', ')
+    super()
+    
   end
 
   alias to_summary to_s
@@ -1655,8 +1746,22 @@ end
 #
 class SwipeTrigger < Trigger
 
-  def initialize(h={})
-
+  def initialize(obj=nil)
+    
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      
+      e, macro = obj
+      s = e.text('item/description').to_s
+      start, motion = s.split(/ - /,2)
+      
+      {
+        swipe_start_area: ['Top Left', 'Top Right'].index(start),
+        swipe_motion: %w(Across Diagonal Down).index(motion)
+      }
+    end 
+    
     options = {
       swipe_start_area: 0,
       swipe_motion: 0,
@@ -1668,7 +1773,12 @@ class SwipeTrigger < Trigger
   end
 
   def to_s(colour: false)
-    'SwipeTrigger ' + @h.inspect
+    
+    direction = [['Top Left', 'Top Right'][@h[:swipe_start_area]], 
+        %w(Across Diagonal Down)[@h[:swipe_motion]]].join(' - ')
+    @s = 'Swipe Screen'# + @h.inspect
+    @s += "\n" + direction
+    super()
   end
 
   alias to_summary to_s

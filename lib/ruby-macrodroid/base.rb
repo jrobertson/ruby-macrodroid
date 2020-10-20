@@ -35,6 +35,7 @@ module ObjectX
         puts 'r: ' + r.inspect if debug
         
         nested = description.element('item/description')
+        puts 'nested: ' + nested.inspect if debug
         
         if r[1].any? and not nested then
           
@@ -204,6 +205,7 @@ class MacroObject
       new_key = key.to_s.gsub(/\w_\w/){|x| x[0] + x[-1].upcase}
       new_key = new_key.prepend 'm_' unless @list.include? new_key
       new_key = 'm_SIGUID' if new_key == 'm_siguid'
+      new_key = 'm_SSIDList' if new_key == 'm_ssidList'
       new_val = value.is_a?(Hash) ? hashify(value) : value
       r.merge(new_key => new_val)
     end

@@ -19,6 +19,10 @@ class TriggersNlp
     
     # -- Battery/Power ---------------------------------------------
     
+    get /Power Button Toggle \((\d)\)/i do |num|
+      [PowerButtonToggleTrigger, {num_toggles: num.to_i}]
+    end    
+    
     get /^Power Connected: (Wired \([^\)]+\))/i do |s|
       
       h = {
@@ -50,7 +54,24 @@ class TriggersNlp
       [ExternalPowerTrigger, h]
     end   
     
+    # -- Connectivity ----------------------------------------------------
+    #
+    
+    # Wifi State Change
+    
+    get /^Connected to network (.*)$/i do |network|            
+      [WifiConnectionTrigger, {ssid_list: [network], wifi_state: 2 }]
+    end         
+    
+    get /^Connected to network$/i do            
+      [WifiConnectionTrigger, {}]
+    end       
+    
     # -- Device Events ----------------------------------------------------
+    
+    get /^NFC Tag$/i do |state|            
+      [NFCTrigger, {}]
+    end         
   
     get /^Screen[ _](On|Off)/i do |state|            
       [ScreenOnOffTrigger, {screen_on: state.downcase == 'on'}]
@@ -132,11 +153,39 @@ class TriggersNlp
       [WebHookTrigger, params]
     end          
 
-    #  MacroDroid specific ---------------------------------------------------------------
+    #-- MacroDroid specific ---------------------------------------------------------------
 
     get /^EmptyTrigger$/i do       
       [EmptyTrigger, params]
-    end          
+    end
+    
+    #-- Sensors ---------------------------------------------------------------
+
+    get /^Activity - (.*)$/i do |s|
+      
+      a = ['In Vehicle', 'On Bicycle', 'Running', 'Walking', 'Still']
+      r = a.find {|x| x.downcase == s.downcase}
+      h = r ? {selected_index: a.index(r)} : {}
+      [ActivityRecognitionTrigger , h]
+    end    
+    
+    # -- User Input ---------------------------------------------------------------
+
+    get /^Media Button Pressed$/i do       
+      [MediaButtonPressedTrigger, {}]
+    end              
+    
+    get /^Media Button V2$/i do       
+      [MediaButtonV2Trigger, {}]
+    end
+    
+    get /^Shortcut Launched$/i do       
+      [ShortcutTrigger, {}]
+    end                  
+    
+    get /^Swipe Screen$/i do       
+      [SwipeTrigger, {}]
+    end     
     
   end
 
