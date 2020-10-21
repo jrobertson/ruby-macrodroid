@@ -1416,6 +1416,10 @@ class ActivityRecognitionTrigger < SensorsTrigger
 
   end
   
+  def match?(detail={})
+    @h[:selected_index] == detail[:selected_index]
+  end
+  
   def to_s(colour: false)
     
     activity = @activity[@h[:selected_index]]
@@ -1539,6 +1543,19 @@ class FlipDeviceTrigger < SensorsTrigger
     super(options.merge h)
 
   end  
+  
+  def match?(detail={})
+    
+    fd = detail[:face_down]
+    
+    b = if fd.is_a? String then
+      fd.downcase == 'true'
+    else
+      fd
+    end
+    
+    @h[:face_down] == b
+  end
   
   def to_pc()
     @h[:face_down] ? 'flip_device_down?' : 'flip_device_up?'
@@ -1771,6 +1788,21 @@ class SwipeTrigger < Trigger
     super(options.merge h)
 
   end
+  
+  def match?(detail={}, model=nil)
+    
+    puts 'detail : ' + detail.inspect
+        
+    return false if detail.empty?
+   
+    detail[:swipe_start_area] = detail[:start]
+    detail[:swipe_motion] = detail[:motion]
+    return unless detail[:swipe_start_area] and detail[:swipe_motion]
+    
+    @h[:swipe_start_area] == detail[:swipe_start_area].to_i and \
+       @h[:swipe_motion] == detail[:swipe_motion].to_i
+
+  end  
 
   def to_s(colour: false)
     

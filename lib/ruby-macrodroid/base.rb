@@ -133,7 +133,8 @@ class MacroObject
   end
 
   def to_h()
-
+    
+    @h.delete :macro
     hashify(@h)
 
   end

@@ -221,6 +221,14 @@ class ActionsNlp
       state = %w(enable disable toggle).index(rawstate.downcase)
       [DisableMacroAction, {state: state}]
     end        
+
+    get /^Macro Run$/i do
+      [ForceMacroRunAction, {}]
+    end
+    
+    get /^Run Macro$/i do
+      [ForceMacroRunAction, {}]
+    end    
     
     get /^Set Variable$/i do
       [SetVariableAction, {}]

@@ -356,7 +356,7 @@ class Macro
     
   end
   
-  def match?(triggerx, detail={time: $env[:time]}, model=nil )
+  def match?(triggerx, detail={}, model=nil )
                 
     if @triggers.any? {|x| x.type == triggerx and x.match?(detail, model) } then
       

@@ -1667,9 +1667,18 @@ class ClearLogAction < LoggingAction
 end
 
 
+class MacroDroidAction < Action
+  
+  def initialize(h={})
+    super(h)
+    @group = 'macrodroid'
+  end
+  
+end
+
 # MacroDroid Specific
 #
-class CancelActiveMacroAction < Action
+class CancelActiveMacroAction < MacroDroidAction
   
   def initialize(h={})
     
@@ -1693,7 +1702,7 @@ end
 
 # MacroDroid Specific
 #
-class ConfirmNextAction < Action
+class ConfirmNextAction < MacroDroidAction
   
   def initialize(h={})
     
@@ -1717,7 +1726,7 @@ class ConfirmNextAction < Action
   
 end
 
-class DisableMacroAction < Action
+class DisableMacroAction < MacroDroidAction
   
   def initialize(obj=nil)
     
@@ -1764,7 +1773,7 @@ end
 
 # MacroDroid Specific
 #
-class ExportMacrosAction < Action
+class ExportMacrosAction < MacroDroidAction
   
   def initialize(h={})
     
@@ -1786,9 +1795,61 @@ class ExportMacrosAction < Action
 end
 
 
+
+class ForceMacroRunAction < MacroDroidAction
+      
+  def initialize(obj=nil)
+    
+    h = if obj.is_a? Hash then
+    
+      obj
+      
+    elsif obj.is_a? Array
+      
+      e, macro, h2 = obj
+      
+      # find the macro guid for the given name
+      name = e.text('item/description').to_s
+      found = macro.parent.macros.find {|macro| macro.title =~ /#{name}/ }
+      
+      h3 = if found then     
+        {macro_name: found.title, GUID: found.guid}
+      else
+        {macro_name: name}
+      end
+      
+      h3.merge h2
+
+    end      
+    
+    options = {
+      guid: nil, ignore_constraints: true, 
+      macro_name: "", use_off_status: false, 
+      user_prompt_title: "Run Macro"      
+    }
+    super(options.merge h)
+    
+  end  
+  
+  def invoke()
+    super(macro_name: @h[:macro_name])
+  end
+  
+  def to_s(colour: false, indent: 0)
+    
+    @s = 'Macro Run'# + @h.inspect
+    @s += "\n" + @h[:macro_name]
+    super()
+    
+  end
+  
+  alias to_summary to_s
+  
+end
+
 # MacroDroid Specific
 #
-class SetVariableAction < Action
+class SetVariableAction < MacroDroidAction
   using ColouredText
   
   def initialize(obj=nil)
@@ -1878,7 +1939,7 @@ end
 
 # MacroDroid Specific
 #
-class TextManipulationAction < Action
+class TextManipulationAction < MacroDroidAction
   
   def initialize(h={})
     
@@ -1921,7 +1982,7 @@ end
 
 
 
-class PauseAction < Action
+class PauseAction < MacroDroidAction
   
   def initialize(h={})
     

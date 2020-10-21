@@ -185,7 +185,27 @@ class TriggersNlp
     
     get /^Swipe Screen$/i do       
       [SwipeTrigger, {}]
-    end     
+    end
+    
+    get /^Swipe (top left) (across|diagonal|down)$/i do |start, motion|
+                  
+      swipe_motion = case motion.downcase.to_sym
+      when :across
+        0
+      when :diagonal
+        1
+      when :down
+        2
+      end
+      
+      h = {
+        swipe_start_area: (start.downcase == 'top left' ? 0 : 1),
+        swipe_motion: swipe_motion
+      }
+      
+      [SwipeTrigger, h]
+      
+    end
     
   end
 
