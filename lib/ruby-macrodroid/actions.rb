@@ -32,6 +32,30 @@
 #  
 
 
+APPS = {
+  'AutoBoy' => 'com.happyconz.blackbox',
+  'Amazon Alexa' => 'com.amazon.dee.app',
+  'Brave' => 'com.brave.browser',
+  'Camera' => 'com.google.android.camera',
+  'Cast to TV' => 'cast.video.screenmirroring.casttotv',
+  'File Manager' => 'com.alphainventor.filemanager',
+  'Firefox' => 'org.mozilla.firefox',
+  'Google Chrome' => 'com.google.android.chrome',
+  'Chrome' => 'com.google.android.chrome',
+  'Google Home' => 'com.google.android.apps.chromecast.app',  
+  'Google Play Music' => 'com.google.android.music',
+  'MacroDroid' => 'com.arlosoft.macrodroid',
+  'QuickEdit Text Editor Pro' => 'com.rhmsoft.edit.pro',
+  'QR & Barcode Reader' => 'com.teacapps.barcodescanner',
+  'Settings' => 'com.google.android.settings',
+  'tinyCam PRO' => 'com.alexvas.dvr.pro',
+  'Tor Browser' => 'org.torproject.torbrowser',
+  'VLC' => 'org.videolan.vlc',
+  'WiFi FTP Server' => 'com.medhaapps.wififtpserver',
+  'YouTube' => 'com.google.android.youtube'
+}
+
+
 class Action < MacroObject
   using ColouredText
   using Params
@@ -2022,6 +2046,62 @@ end
 
 # Category: Media
 #
+
+
+# note: to find a package id from an App name, try searching for the name on 
+#       the Google Play Store and the id will be returned in the URL once the 
+#       correct app has been clicked. e.g.
+#       https://play.google.com/store/apps/details?id=com.google.android.music
+#
+class ControlMediaAction < MediaAction
+
+  def initialize(obj=nil)
+
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      
+      e, macro = obj      
+      s = e.text('item/description').to_s
+      app = s[/Simulate Media Button \(([^\)]+)/,1]
+      
+      if app then        
+        
+        {
+          application_name: app,  package_name: APPS[app], 
+          simulate_media_button: true
+        }
+        
+      else
+        {}
+      end
+    end 
+    
+    options = {
+      application_name: "Google Play Music", option: "Play/Pause", 
+      package_name: "com.google.android.music", 
+      send_media_player_commands: false, 
+      simulate_media_button: true,
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s(colour: false, indent: 0)
+    
+    @s = 'Media ' + @h[:option] #+ @h.inspect
+    
+    if @h[:simulate_media_button] then
+      @s +=  "\nSimulate Media Button (%s)" % @h[:application_name]
+    end
+    
+    super()
+  end
+
+  alias to_summary to_s
+end
+
 class RecordMicrophoneAction < MediaAction
 
   def initialize(h={})

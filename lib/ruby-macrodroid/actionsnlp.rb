@@ -134,9 +134,11 @@ class ActionsNlp
     # e.g. Launch Settings
     get /^Launch (.*)$/i do |application|
 
+      app = APPS[application] || 'com.android.' + application.downcase.split()\
+          .join('.')
       h = {
         application_name: application,
-        package_to_launch: 'com.android.' + application.downcase
+        package_to_launch: app
       }
       [LaunchActivityAction, h]
       
@@ -237,6 +239,14 @@ class ActionsNlp
     get /^wait (\d+) seconds$/i do |seconds|
       [PauseAction, {delay_in_seconds: seconds.to_i}]
     end        
+    
+    ## -- Media -----------------------------------------
+    #
+    # options: Play/Pause, Previous, Next, Play, Pause, Stop
+    #
+    get /^Media ([^$]+)$/i do |option|
+      [ControlMediaAction, {option: option}]
+    end            
     
     # -- Screen ------------------------------------------------
     #
