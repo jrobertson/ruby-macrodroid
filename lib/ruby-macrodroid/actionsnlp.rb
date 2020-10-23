@@ -90,6 +90,7 @@ class ActionsNlp
     
     # -- DEVICE ACTIONS ------------------------------------------------------
     
+    #
     get /^Speak text \(([^\)]+)\)/i do |text|
       [SpeakTextAction, {text: text}]
     end           
@@ -100,7 +101,11 @@ class ActionsNlp
     
     get /^Speak text$/i do |text|
       [SpeakTextAction, {}]
-    end     
+    end  
+    
+    get /^UI Interaction$/i do
+      [UIInteractionAction, {}]
+    end  
     
     get /^Vibrate \(([^\)]+)/i do |pattern|
       [VibrateAction, {pattern: pattern}]
@@ -123,6 +128,10 @@ class ActionsNlp
       [SetWifiAction, {state: state}]
       
     end    
+        
+    get /^Fill Clipboard$/i do            
+      [ClipboardAction, {}]
+    end           
     
     # e.g. Play: Altair
     get /^Play: (.*)$/i do |name|
@@ -156,6 +165,19 @@ class ActionsNlp
       [OpenWebPageAction, {}]
       
     end    
+    
+    
+    get /^Open Website \/ HTTP GET$/i do
+
+      [OpenWebPageAction, {http_get: false}]
+      
+    end
+    
+    get /^(?:open|goto) ((?:https?:\/\/|\[lv=)[^$]+)$/i do |url|
+
+      [OpenWebPageAction, url_to_open: url, http_get: false]
+      
+    end
     
     # e.g. webhook entered_kitchen
     #

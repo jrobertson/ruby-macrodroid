@@ -174,17 +174,17 @@ class OpenWebPageAction < ApplicationAction
 
   def initialize(obj={}, macro=nil)
 
-    $debug = false    
+    $debug = true    
     puts ('obj: ' + obj.inspect).debug if $debug
     
     h = if obj.is_a? Hash then
     
-      obj.merge({macro: macro})
+      obj.merge({macro: macro}) #unless obj and obj[:macro]
       
     elsif obj.is_a? Array
       
       puts ('obj: ' + obj.inspect).debug if $debug
-      e, macro = obj
+      e, macro, h3 = obj
       
       a = e.xpath('item/*')
 
@@ -205,7 +205,7 @@ class OpenWebPageAction < ApplicationAction
         {url: (txt || e.text)}
       end      
       
-      h2.merge(macro: macro)
+      h2.merge(macro: macro).merge(h3)
 
     end
 
@@ -243,6 +243,7 @@ class OpenWebPageAction < ApplicationAction
           h[:macro].title.downcase.gsub(/ +/,'-')            
       
     end        
+    puts 'url: ' + url.inspect if $debug
     
     if h2 then
       
@@ -266,7 +267,8 @@ class OpenWebPageAction < ApplicationAction
   end
   
   def to_s(colour: false, indent: 0)
-    @s = "HTTP GET\nurl: " + @h[:url_to_open]
+    s = @h[:http_get] ? '' : 'Open Website / '
+    @s = s + "HTTP GET\nurl: " + @h[:url_to_open]
     super()
   end
 
@@ -985,8 +987,15 @@ end
 #
 class ClipboardAction < DeviceAction
 
-  def initialize(h={})
+  def initialize(obj=nil)
 
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      e, macro = obj
+      {clipboard_text: e.text('item/description').to_s}
+    end    
+    
     options = {
       clipboard_text: ''
     }
@@ -1066,14 +1075,57 @@ end
 #
 class UIInteractionAction < DeviceAction
 
-  def initialize(h={})
+  def initialize(obj=nil)
 
+    if obj.is_a? Hash then
+      h = obj
+    elsif obj.is_a? Array
+      
+      e, macro = obj
+      s = e.text('item/description').to_s
+      
+      r = s.match(/^(Click|Long Click) \[([^\]]+)/)
+
+      # [Current focus] # Current focus
+      # [0,0] # x,y location
+      # [274,186] # Identify in app
+      # [fooo] # Text content
+
+      h = {
+        ui_interaction_configuration: {}, :xy_point=>{:x=>0, :y=>0}, 
+        :type=>"Click"
+      }
+      h2 = {}
+
+      if r then
+
+        h[:action] = 0
+
+        click, detail = r.captures
+        h2[:long_click] = false if click.downcase.to_sym == :click
+
+        if detail == 'Current focus' then          
+          h2[:click_option] = 1
+        elsif detail =~ /\d+,\d+/
+          # to-do   
+        else
+          # text content
+          h2[:click_option] = 1
+          h2[:text_content] = detail
+        end
+        
+        h[:ui_interaction_configuration] = h2
+      end
+
+    end   
+    
     options = {
       ui_interaction_configuration: {:type=>"Copy"},
       action: 2
     }
 
-    super(options.merge h)
+
+    super(options.merge h) 
 
   end
 
@@ -1113,7 +1165,7 @@ class UIInteractionAction < DeviceAction
       "Gesture [%s]" % detail
     end
     
-    'UI Interaction' + "\n  " + s #+ ' ' + @h.inspect
+    'UI Interaction' + "\n  " + s + ' ' + @h.inspect
   end
 
   alias to_summary to_s

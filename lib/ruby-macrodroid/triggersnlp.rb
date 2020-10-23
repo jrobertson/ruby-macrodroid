@@ -67,6 +67,8 @@ class TriggersNlp
       [WifiConnectionTrigger, {}]
     end       
     
+  
+    
     # -- Device Events ----------------------------------------------------
     
     get /^NFC Tag$/i do |state|            

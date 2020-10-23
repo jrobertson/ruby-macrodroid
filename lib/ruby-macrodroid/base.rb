@@ -12,7 +12,7 @@ module ObjectX
   
   def action_to_object(ap, e, item, macro)
     
-    debug = false
+    debug = true
     
     puts 'inside action_to_object: item.xml: ' + item.xml if debug
         
@@ -34,7 +34,7 @@ module ObjectX
         r = ap.find_action action          
         puts 'r: ' + r.inspect if debug
         
-        nested = description.element('item/description')
+        nested = description.element('item/*')
         puts 'nested: ' + nested.inspect if debug
         
         if r[1].any? and not nested then
