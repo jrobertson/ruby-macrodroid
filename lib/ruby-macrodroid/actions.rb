@@ -100,19 +100,28 @@ class LaunchActivityAction < ApplicationAction
 
   def initialize(h={})
 
+    # option 0 is by application name, 1 is launch by package name
+    #
     options = {
       application_name: 'Chrome',
       package_to_launch: 'com.android.chrome',
       exclude_from_recents: false,
-      start_new: false
+      start_new: false,
+      option: 0,
+      launch_by_package_name: ''
     }
 
     super(options.merge h)
+    
+    @list = %w(option launchByPackageName)
 
   end
   
   def to_s(colour: false, indent: 0)
-    'Launch ' + @h[:application_name]
+    option = @h[:option] == 0 ? @h[:application_name] : \
+        @h[:launch_by_package_name]
+    @s = 'Launch ' + option
+    super()
   end
 
 end
@@ -401,6 +410,61 @@ class TakePictureAction < CameraAction
     
   end  
 
+end
+
+
+class TakeScreenshotAction < CameraAction
+
+  def initialize(obj=nil)
+    
+    h = if obj.is_a? Hash then
+      obj
+    elsif obj.is_a? Array
+      
+      e, macro = obj      
+      
+      a = [
+        'Save to device', 
+        'Send via email', 
+        'Share via intent'
+      ]
+      
+      s = e.text('item/description').to_s
+      index = a.map(&:downcase).index s.downcase
+    
+      {option: index}
+      
+    end 
+    
+    options = {
+      option: 0, 
+      use_smtp_email: false, 
+      mechanism_option: 0, 
+      save_to_jpeg: false
+    }
+
+    super(options.merge h)
+
+  end
+
+  def to_s(colour: false, indent: 0)
+    
+    @s = 'Take Screenshot' #+ @h.inspect
+    
+    options = [
+      'Save to device', 
+      'Send via email', 
+      'Share via intent'
+    ]
+    
+    option = options[@h[:option]]
+    
+    @s += "\n" + option
+    super()
+    
+  end
+
+  alias to_summary to_s
 end
 
 
@@ -1084,7 +1148,7 @@ class UIInteractionAction < DeviceAction
       e, macro = obj
       s = e.text('item/description').to_s
       
-      r = s.match(/^(Click|Long Click) \[([^\]]+)/)
+      r = s.match(/^(Click|Long Click) \[(.*)\]$/)
 
       # [Current focus] # Current focus
       # [0,0] # x,y location
@@ -1092,10 +1156,11 @@ class UIInteractionAction < DeviceAction
       # [fooo] # Text content
 
       h = {
-        ui_interaction_configuration: {}, :xy_point=>{:x=>0, :y=>0}, 
-        :type=>"Click"
+        ui_interaction_configuration: {
+                                       :xy_point=>{:x=>0, :y=>0},
+                                       :type=>"Click"} 
       }
-      h2 = {}
+      h2 = h[:ui_interaction_configuration]
 
       if r then
 
@@ -1105,7 +1170,7 @@ class UIInteractionAction < DeviceAction
         h2[:long_click] = false if click.downcase.to_sym == :click
 
         if detail == 'Current focus' then          
-          h2[:click_option] = 1
+          h2[:click_option] = 0
         elsif detail =~ /\d+,\d+/
           # to-do   
         else
@@ -1114,7 +1179,7 @@ class UIInteractionAction < DeviceAction
           h2[:text_content] = detail
         end
         
-        h[:ui_interaction_configuration] = h2
+        #h[:ui_interaction_configuration] = h2
       end
 
     end   
@@ -1126,6 +1191,8 @@ class UIInteractionAction < DeviceAction
 
 
     super(options.merge h) 
+    
+    @list = %w(uiInteractionConfiguration action xyPoint textContent  clickOption type longClick)
 
   end
 
@@ -1165,7 +1232,8 @@ class UIInteractionAction < DeviceAction
       "Gesture [%s]" % detail
     end
     
-    'UI Interaction' + "\n  " + s + ' ' + @h.inspect
+    @s = 'UI Interaction' + "\n" + s #+ ' ' + @h.inspect
+    super()
   end
 
   alias to_summary to_s
@@ -1185,7 +1253,10 @@ class VoiceSearchAction < DeviceAction
   end
 
   def to_s(colour: false, indent: 0)
-    'VoiceSearchAction ' + @h.inspect
+    
+    @s = 'Voice Search' # + @h.inspect
+    super()
+    
   end
 
   alias to_summary to_s

@@ -86,7 +86,11 @@ class ActionsNlp
     
     get /^take_picture/i do
       [TakePictureAction, {}]
-    end           
+    end
+    
+    get /^Take Screenshot/i do
+      [TakeScreenshotAction, {}]
+    end               
     
     # -- DEVICE ACTIONS ------------------------------------------------------
     
@@ -114,6 +118,11 @@ class ActionsNlp
     get /^Vibrate$/i do |pattern|
       [VibrateAction, {pattern: 'short buzz'}]
     end       
+
+    get /^Voice Search$/i do
+      [VoiceSearchAction, {}]
+    end           
+    
     
     # e.g. Display Notification: Hi there: This is the body of the message
     get /^Display Notification: ([^:]+): [^$]+$/i do |subject, text|
@@ -141,14 +150,24 @@ class ActionsNlp
     end     
     
     # e.g. Launch Settings
-    get /^Launch (.*)$/i do |application|
+    get /^Launch (.*)$/i do |s|
 
-      app = APPS[application] || 'com.android.' + application.downcase.split()\
-          .join('.')
-      h = {
-        application_name: application,
-        package_to_launch: app
-      }
+      h = {}
+      
+      if s[0] == '[' then
+        
+        h[:launch_by_package_name] = s
+        h[:option] = 1
+        
+      else
+        application = s
+        h[:application_name] = application
+        h[:package_to_launch] = APPS[application] || 'com.android.' + 
+            application.downcase.split().join('.')
+        h[:option] = 0
+        
+      end
+      
       [LaunchActivityAction, h]
       
     end

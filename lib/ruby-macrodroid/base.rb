@@ -195,6 +195,7 @@ class MacroObject
     
   end
   
+  
   private
   
   def hashify(h)
