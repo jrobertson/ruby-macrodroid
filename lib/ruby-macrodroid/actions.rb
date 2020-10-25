@@ -36,18 +36,24 @@ APPS = {
   'AutoBoy' => 'com.happyconz.blackbox',
   'Amazon Alexa' => 'com.amazon.dee.app',
   'Brave' => 'com.brave.browser',
-  'Camera' => 'com.google.android.camera',
+  'Camera' => 'com.mediatek.camera',
   'Cast to TV' => 'cast.video.screenmirroring.casttotv',
+  'Calculator' => 'com.android.pri.calculator',
+  'Calendar' => 'com.google.android.calendar',
+  'Clock' => 'com.android.deskclock',
   'File Manager' => 'com.alphainventor.filemanager',
   'Firefox' => 'org.mozilla.firefox',
   'Google Chrome' => 'com.google.android.chrome',
+  'Google Calendar' => 'com.google.android.calendar',
   'Chrome' => 'com.google.android.chrome',
+  'Earth' => 'com.google.earth',
   'Google Home' => 'com.google.android.apps.chromecast.app',  
   'Google Play Music' => 'com.google.android.music',
   'MacroDroid' => 'com.arlosoft.macrodroid',
   'QuickEdit Text Editor Pro' => 'com.rhmsoft.edit.pro',
   'QR & Barcode Reader' => 'com.teacapps.barcodescanner',
-  'Settings' => 'com.google.android.settings',
+  'Settings' => 'com.android.settings',
+  'Chrome' => 'com.google.android.street',
   'tinyCam PRO' => 'com.alexvas.dvr.pro',
   'Tor Browser' => 'org.torproject.torbrowser',
   'VLC' => 'org.videolan.vlc',
@@ -99,7 +105,7 @@ end
 class LaunchActivityAction < ApplicationAction
 
   def initialize(h={})
-
+ 
     # option 0 is by application name, 1 is launch by package name
     #
     options = {
@@ -152,13 +158,30 @@ end
 #
 class LaunchShortcutAction < ApplicationAction
 
-  def initialize(h={})
+  def initialize(obj=nil)
     
+    puts 'obj: ' + obj.inspect
+    h = if obj.is_a? Hash then
+      obj
+    else
+      obj[2] || {}
+    end
+    
+    if h[:shortcut] and h[:shortcut] =~ /Ask Alexa/i then
+      h = {
+        :app_name=>"Amazon Alexa", :intent_encoded=>"#Intent;action=com." +   
+          "amazon.alexa.action.WIDGET_SHORTCUT;launchFlags=0x10000000;" + 
+          "component=com.amazon.dee.app/.ui.voice.LaunchAlexaActivity;end", 
+          :name=>"Ask Alexa"
+      }
+    end    
     options = {
       :app_name=>"Amazon Alexa", :intent_encoded=>"", :name=>"Ask Alexa"
     }
 
     super(options.merge h)
+    
+    #@list = %w(appName intentEncoded name)
 
   end
   
@@ -1398,7 +1421,11 @@ class SetAutoRotateAction < DeviceSettingsAction
   end
 
   def to_s(colour: false, indent: 0)
-    'SetAutoRotateAction ' + @h.inspect
+        
+    #'SetAutoRotateAction ' + @h.inspect
+    @s = 'Auto Rotate ' + %w(On Off Toggle)[@h[:state]]
+    super()
+    
   end
 
   alias to_summary to_s
@@ -2184,7 +2211,7 @@ class ControlMediaAction < MediaAction
       obj
     elsif obj.is_a? Array
       
-      e, macro = obj      
+      e, macro, h2 = obj      
       s = e.text('item/description').to_s
       app = s[/Simulate Media Button \(([^\)]+)/,1]
       
@@ -2193,12 +2220,13 @@ class ControlMediaAction < MediaAction
         {
           application_name: app,  package_name: APPS[app], 
           simulate_media_button: true
-        }
+        }.merge h2
         
       else
         {}
       end
-    end 
+    end
+    #puts 'h: ' + h.inspect
     
     options = {
       application_name: "Google Play Music", option: "Play/Pause", 

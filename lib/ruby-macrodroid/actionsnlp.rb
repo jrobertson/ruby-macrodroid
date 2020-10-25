@@ -123,6 +123,14 @@ class ActionsNlp
       [VoiceSearchAction, {}]
     end           
     
+    # -- Device settings ---------------------------------------
+    
+    get /^Auto Rotate (On|Off|Toggle)$/i do |state|
+      
+      a = %w(on off toggle)
+      
+      [SetAutoRotateAction, {state: a.map(&:downcase).index(state.downcase)}]
+    end               
     
     # e.g. Display Notification: Hi there: This is the body of the message
     get /^Display Notification: ([^:]+): [^$]+$/i do |subject, text|
@@ -148,6 +156,14 @@ class ActionsNlp
       [PlaySoundAction, {file_path: name}]
       
     end     
+
+    get /^Launch Shortcut:? (?:Amazon|Ask) Alexa$/i do
+      [LaunchShortcutAction, {shortcut: 'Ask Alexa'}]      
+    end
+    
+    get /^Shortcut:? (?:Amazon|Ask) Alexa$/i do
+      [LaunchShortcutAction, {shortcut: 'Ask Alexa'}]      
+    end    
     
     # e.g. Launch Settings
     get /^Launch (.*)$/i do |s|
