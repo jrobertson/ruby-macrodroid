@@ -41,6 +41,27 @@ class ActionsNlp
     
     # -- Connectivity ------------------------------------------------------
     
+    get /^Airplane Mode (On|Off|Toggle)/i do |state|
+      
+      index = %w(on off toggle).index state.downcase
+      [SetAirplaneModeAction, {state: index }]
+      
+    end       
+    
+    get /^(Enable|Disable|Toggle) Bluetooth/i do |state|
+      
+      index = %w(enable disable toggle).index state.downcase
+      [SetBluetoothAction, {state: index }]
+      
+    end    
+    
+    get /^(Connect|Disconnect) Audio Device/i do |state|
+      
+      index = %w(connect disconnect).index(state.downcase) + 3
+      [SetBluetoothAction, {state: index }]
+      
+    end    
+    
     get /^(Enable|Disable) HotSpot/i do |state|
       enable, state = if state.downcase == 'enable' then
         [true, 0]
@@ -49,6 +70,19 @@ class ActionsNlp
       end
       [SetHotspotAction, {turn_wifi_on: enable, state: state }]
     end   
+    
+    get /^(Enable|Disable|Toggle) Wifi/i do |state|
+      
+      index = %w(enable disable toggle).index state.downcase
+      [SetWifiAction, {state: index }]
+      
+    end       
+    
+    get /^Connect to Network$/i do
+      
+      [SetWifiAction, {state: 4 }]
+      
+    end    
     
     # e.g. message popup: hello world!
     get /^(?:message popup|popup message): (.*)/i do |msg|

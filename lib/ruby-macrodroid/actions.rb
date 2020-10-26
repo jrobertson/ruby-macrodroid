@@ -797,7 +797,7 @@ class SetAirplaneModeAction < ConnectivityAction
     
     state = ['On', 'Off', 'Toggle'][@h[:state]]
     @s = 'Airplane Mode ' + state
-    super(colour: colour)
+    super()
     
   end
 
@@ -819,12 +819,20 @@ class SetWifiAction < ConnectivityAction
 
   end
   
-  def to_s(colour: false, indent: 0)
-    action = @h[:state] == 0 ? 'Enable' : 'Disable'
-    action + ' Wifi'
+  def to_s(colour: false, indent: 0)    
+    
+    @s = if @h[:state] <= 2 then
+      state = %w(Enable Disable Toggle)[@h[:state]]      
+      state + ' Wifi'
+    else
+      "Connected to Network\n%s" % @h[:ssid]
+    end
+    
+    super()
   end
 
 end
+
 
 # Category: Connectivity
 #
@@ -833,28 +841,8 @@ class SetBluetoothAction < ConnectivityAction
   def initialize(h={})
 
     options = {
-      device_name: '',
-      state: 0
-    }
-
-    super(options.merge h)
-
-  end
-
-  def to_s(colour: false, indent: 0)
-    'SetBluetoothAction ' + @h.inspect
-  end
-
-  alias to_summary to_s
-end
-
-# Category: Connectivity
-#
-class SetBluetoothAction < ConnectivityAction
-
-  def initialize(h={})
-
-    options = {
+      
+      device_address: '',
       device_name: '',
       state: 1
     }
@@ -864,7 +852,21 @@ class SetBluetoothAction < ConnectivityAction
   end
 
   def to_s(colour: false, indent: 0)
-    'SetBluetoothAction ' + @h.inspect
+    
+    @s = if @h[:state] <= 2 then
+    
+      state = %w(Enable Disable Toggle)[@h[:state]]
+      state + ' Bluetooth'
+      
+    else
+      
+      state = @h[:state] == 3 ? 'Connect' : 'Disconnect'
+      state + ' Audio Device' + "\n" + @h[:device_name]
+      
+    end
+
+    super()
+    
   end
 
   alias to_summary to_s
@@ -2223,16 +2225,18 @@ class ControlMediaAction < MediaAction
         }.merge h2
         
       else
-        {}
+        {
+          send_media_player_commands: true, 
+          simulate_media_button: false
+        }
       end
     end
     #puts 'h: ' + h.inspect
     
     options = {
-      application_name: "Google Play Music", option: "Play/Pause", 
-      package_name: "com.google.android.music", 
-      send_media_player_commands: false, 
-      simulate_media_button: true,
+      option: "Play/Pause", 
+      send_media_player_commands: true, 
+      simulate_media_button: false,
     }
 
     super(options.merge h)
@@ -2245,6 +2249,8 @@ class ControlMediaAction < MediaAction
     
     if @h[:simulate_media_button] then
       @s +=  "\nSimulate Media Button (%s)" % @h[:application_name]
+    else
+      @s +=  "\nSimulate Audio Button"
     end
     
     super()
