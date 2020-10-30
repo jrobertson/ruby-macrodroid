@@ -19,9 +19,13 @@ class TriggersNlp
     
     # -- Battery/Power ---------------------------------------------
     
-    get /Power Button Toggle \((\d)\)/i do |num|
+    get /^Power Button Toggle \((\d)\)/i do |num|
       [PowerButtonToggleTrigger, {num_toggles: num.to_i}]
     end    
+    
+    get /^Power Button (\d) times$/i do |num|
+      [PowerButtonToggleTrigger, {num_toggles: num.to_i}]
+    end
     
     get /^Power Connected: (Wired \([^\)]+\))/i do |s|
       

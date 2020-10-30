@@ -255,6 +255,10 @@ class ActionsNlp
       [OpenWebPageAction, {key => s}]
     end
     
+    get /(https?:\/\/[^$]+)$/i do |url|
+      [OpenWebPageAction, {url_to_open: url}]
+    end
+    
     #
     get /^WebHook \(Url\)/i do
       [OpenWebPageAction, {}]

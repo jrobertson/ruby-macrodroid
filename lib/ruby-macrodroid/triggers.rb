@@ -215,6 +215,10 @@ class PowerButtonToggleTrigger < Trigger
     super(options.merge h)
 
   end
+  
+  def match?(detail={}, model=nil)
+    @h[:num_toggles] == detail[:num_toggles].to_i
+  end
 
   def to_s(colour: false)
     "Power Button Toggle (%s)" % @h[:num_toggles] #+ @h.inspect
