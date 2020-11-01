@@ -224,8 +224,12 @@ class OpenWebPageAction < ApplicationAction
       
         a.map do |node|
           
-          if node.name == 'description' and node.text.to_s =~ /: / then
-            node.text.to_s.split(/: +/,2).map(&:strip)
+          if node.name == 'description' then
+            if node.text.to_s =~ /: / then
+              node.text.to_s.split(/: +/,2).map(&:strip)
+            else
+              [:url, node.text.to_s]
+            end
           else
             [node.name.to_sym, node.text.to_s.strip]
           end
@@ -295,7 +299,8 @@ class OpenWebPageAction < ApplicationAction
   end
   
   def invoke()
-    super(url: @h[:url_to_open])
+    serverside = @h[:serverside].to_s.downcase == 'true'
+    super(url_to_open: @h[:url_to_open], serverside: serverside)
   end
   
   def to_s(colour: false, indent: 0)
